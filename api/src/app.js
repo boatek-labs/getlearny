@@ -55,7 +55,11 @@ app.get('/api/v1/tests',auth,asyncRoute(async(req,res)=>{const r=await query('SE
 app.post('/api/v1/journal',auth,asyncRoute(async(req,res)=>{const s=journalSchema.safeParse(req.body);if(!s.success)return fail(res,400,s.error.issues[0].message);const d=s.data;const r=await query('INSERT INTO journal_entries(user_id,learned,difficult,next_step) VALUES($1,$2,$3,$4) RETURNING id,learned,difficult,next_step,created_at',[req.user.sub,d.learned,d.difficult,d.next_step]);res.status(201).json({entry:r.rows[0]})}));
 app.get('/api/v1/journal',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,learned,difficult,next_step,created_at FROM journal_entries WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[req.user.sub]);res.json({entries:r.rows})}));
 const lessonInput=z.object({subject:z.string().trim().min(1).max(100),topic:z.string().trim().min(1).max(200),level:z.string().max(30).default('SHS 3'),exam:z.string().max(30).default('WASSCE')});
-app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{const s=lessonInput.safeParse(req.body);if(!s.success)return fail(res,400,s.error.issues[0].message);const {subject,topic,level,exam}=s.data;let lesson=`# ${topic}
+app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
+  const parsed=lessonInput.safeParse(req.body);
+  if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
+  const {subject,topic,level,exam}=parsed.data;
+  const fallback=`# ${topic}
 
 **Subject:** ${subject} · **Level:** ${level} · **Exam focus:** ${exam}
 
@@ -78,8 +82,30 @@ Answer the exact question, show clear working where appropriate, and reserve a m
 
 ## Quick recall
 Close your notes and explain the main idea in three sentences. Then attempt practice questions and review every mistake.`;
-if(process.env.OPENROUTER_API_KEY){try{const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENROUTER_API_KEY}`,'Content-Type':'application/json','HTTP-Referer':process.env.APP_URL||'https://getlearny.local','X-Title':'GetLearny'},body:JSON.stringify({model:process.env.OPENROUTER_MODEL||'openrouter/free',messages:[{role:'system',content:'You are a careful Ghana SHS tutor preparing students for WASSCE. Teach prerequisite concepts first, use age-appropriate language, worked examples, common mistakes, and a short self-check. Do not fabricate official syllabus claims.'},{role:'user',content:`Create a useful lesson in Markdown. Subject: ${subject}. Topic: ${topic}. Level: ${level}. Exam: ${exam}. Include goals, prerequisite check, explanation, worked example, common mistakes, exam tip, and 3 self-check questions with answers at the end.`}],temperature:0.4,max_tokens:1800}),signal:AbortSignal.timeout(25000)});if(response.ok){const data=await response.json();lesson=data.choices?.[0]?.message?.content||lesson}}catch{ /* reliable built-in lesson remains available */ }}
-res.json({lesson,generatedBy:process.env.OPENROUTER_API_KEY?'openrouter-or-fallback':'built-in',subject,topic})}));
+  let lesson=fallback,generatedBy='built-in';
+  const key=process.env.OPENROUTER_API_KEY;
+  if(key){
+    const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,3);
+    for(const model of models){
+      try{
+        const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+          method:'POST',
+          headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':process.env.OPENROUTER_APP_NAME||'GetLearny'},
+          body:JSON.stringify({model,messages:[
+            {role:'system',content:'You are a careful Ghana SHS tutor preparing students for WASSCE. Teach prerequisite concepts first, use age-appropriate language, worked examples, common mistakes, and a short self-check. Do not fabricate official syllabus claims.'},
+            {role:'user',content:`Create a useful lesson in Markdown. Subject: ${subject}. Topic: ${topic}. Level: ${level}. Exam: ${exam}. Include goals, prerequisite check, explanation, worked example, common mistakes, exam tip, and 3 self-check questions with answers at the end.`}
+          ],temperature:0.4,max_tokens:1800}),
+          signal:AbortSignal.timeout(9000)
+        });
+        if(!response.ok)continue;
+        const data=await response.json();
+        const content=data.choices?.[0]?.message?.content;
+        if(typeof content==='string'&&content.trim()){lesson=content;generatedBy='openrouter';break}
+      }catch{/* try the next configured model; built-in lesson remains available */}
+    }
+  }
+  res.json({lesson,generatedBy,subject,topic});
+}));
 const uploadDir=path.resolve(process.env.UPLOAD_DIR||(process.env.VERCEL?'/tmp/getlearny-uploads':'./uploads'));fs.mkdirSync(uploadDir,{recursive:true});const storage=multer.diskStorage({destination:(_req,_file,cb)=>cb(null,uploadDir),filename:(_req,file,cb)=>cb(null,`${Date.now()}-${randomUUID()}.upload`)});const upload=multer({storage,limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||12)*1024*1024,files:1},fileFilter:(_req,file,cb)=>{const allowed=['application/pdf','text/plain'];if(!allowed.includes(file.mimetype))return cb(new Error('Only PDF and plain-text files are accepted'));cb(null,true)}});
 app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res)=>{if(!req.file)return fail(res,400,'Select a PDF or text file');const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,processing_status) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,original_name,mime_type,size_bytes,processing_status,created_at',[req.user.sub,path.basename(req.file.originalname).slice(0,255),req.file.path,req.file.mimetype,req.file.size,'queued']);res.status(201).json({document:r.rows[0],message:'File received. Configure an OCR/text extraction worker to process scanned PDFs.'})}));
 app.use((err,_req,res,_next)=>{if(err instanceof multer.MulterError)return fail(res,err.code==='LIMIT_FILE_SIZE'?413:400,err.code==='LIMIT_FILE_SIZE'?'File is too large':'Upload failed');if(err.message==='Origin not allowed by CORS')return fail(res,403,err.message);console.error(err);return fail(res,500,process.env.NODE_ENV==='production'?'Unexpected server error':err.message||'Unexpected server error')});
