@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main, master]
-    paths: ['api/**', '.github/workflows/api-checks.yml']
+    paths: ['api/**', 'web/**', 'package.json', 'vercel.json', '.github/workflows/api-checks.yml']
   pull_request:
     paths: ['api/**', '.github/workflows/api-checks.yml']
 
@@ -25,3 +25,8 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run check
       - run: npm test
+      - name: Check Vercel function and browser JavaScript syntax
+        run: |
+          node --check '[...path].js'
+          node --check ../web/app.js
+          node -e "JSON.parse(require('node:fs').readFileSync('../vercel.json', 'utf8'))"
