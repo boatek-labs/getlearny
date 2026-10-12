@@ -38,7 +38,7 @@ jobs:
 
       - name: Generate Android platform files without replacing app source
         run: |
-          flutter create --platforms=android --org gh.boatek.getlearny --project-name getlearny /tmp/getlearny-android-scaffold
+          flutter create --platforms=android --org com.boateklabs --project-name getlearny /tmp/getlearny-android-scaffold
           cp -R /tmp/getlearny-android-scaffold/android app/android
 
       - name: Resolve packages
@@ -57,7 +57,12 @@ jobs:
         working-directory: app
         env:
           GETLEARNY_API_URL: ${{ vars.GETLEARNY_API_URL }}
-        run: flutter build apk --debug --dart-define=GETLEARNY_API_URL=${GETLEARNY_API_URL:-https://example.invalid/api/v1}
+        run: |
+          if [ -n "$GETLEARNY_API_URL" ]; then
+            flutter build apk --debug --dart-define=GETLEARNY_API_URL="$GETLEARNY_API_URL"
+          else
+            flutter build apk --debug
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
