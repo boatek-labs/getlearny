@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.*
+!.env.example
+coverage/
+.DS_Store
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+build/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
