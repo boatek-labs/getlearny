@@ -1,0 +1,17 @@
+{
+  "name": "getlearny",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "api"
+  ],
+  "scripts": {
+    "build": "node -e \"console.log('GetLearny web and API are ready for Vercel')\"",
+    "db:migrate": "npm --workspace getlearny-api run db:migrate",
+    "check": "npm --workspace getlearny-api run check && npm --workspace getlearny-api test"
+  }
+}

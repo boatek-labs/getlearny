@@ -22,6 +22,17 @@ npm run dev
 
 Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and optionally `OPENROUTER_API_KEY` in `api/.env`. Never commit secrets. Without an OpenRouter key, lesson generation uses a built-in fallback lesson.
 
+## Deploy to Vercel + Neon PostgreSQL
+
+1. Import this repository into Vercel and keep the project root as the repository root.
+2. Vercel uses `vercel.json`: it serves the `web/` directory and routes `/api/*` to the Express serverless handler in `api/[...path].js`.
+3. In **Vercel → Project → Settings → Environment Variables**, add `DATABASE_URL` using your Neon pooled connection string, `JWT_SECRET` as a newly generated random secret of at least 32 characters, and `APP_URL` as the production HTTPS URL. Add `OPENROUTER_API_KEY` only if AI lesson generation is wanted. Never commit actual secrets.
+4. Add `CORS_ORIGINS` only when using a separate frontend domain; for a same-origin deployment the app works at `/api/v1` by default. Include the production URL if you set a restrictive allow-list.
+5. Run the database migrations once against Neon from a trusted terminal after setting `DATABASE_URL`: `npm run db:migrate`. Do not run migrations as part of every Vercel build.
+6. Redeploy after setting environment variables. Check `https://YOUR-VERCEL-DOMAIN/api/v1/health` and confirm the database reports connected.
+
+**Important:** Vercel's local filesystem is ephemeral. Current document uploads use temporary storage there, so uploaded files will not be durable across invocations. Configure private object storage before relying on document uploads in production.
+
 ## Preview the web app
 From the repository root, run:
 

@@ -1,4 +1,4 @@
-const DEFAULT_API = '';
+const DEFAULT_API = '/api/v1';
 const SUBJECTS = [
   {name:'Mathematics',icon:'∑',code:'MATH',progress:62,description:'Number, algebra, geometry and statistics',topic:'Algebra foundations'},
   {name:'English Language',icon:'Aa',code:'ENG',progress:74,description:'Comprehension, summary, grammar and writing',topic:'Reading comprehension'},
