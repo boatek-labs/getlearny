@@ -69,7 +69,7 @@ class _DashboardPageState extends State<DashboardPage> {
     Text('MONDAY, STUDY DAY',style:TextStyle(fontSize:11,letterSpacing:1.5,fontWeight:FontWeight.w800,color:Colors.blueGrey.shade500)),const SizedBox(height:8),
     Text('Let’s make progress, ${widget.name.split(' ').first}.',style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:ink,height:1.12)),const SizedBox(height:18),
     Container(padding:const EdgeInsets.all(22),decoration:BoxDecoration(gradient:const LinearGradient(colors:[ink,Color(0xFF1C4778)],begin:Alignment.topLeft,end:Alignment.bottomRight),borderRadius:BorderRadius.circular(24)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[const Expanded(child:Text('YOUR WASSCE JOURNEY',style:TextStyle(color:gold,fontSize:11,letterSpacing:1.3,fontWeight:FontWeight.w800))),Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:6),decoration:BoxDecoration(color:Colors.white.withValues(alpha:.12),borderRadius:BorderRadius.circular(20)),child:const Text('SHS 3',style:TextStyle(color:Colors.white,fontSize:11,fontWeight:FontWeight.w700)))]),const SizedBox(height:14),const Text('Small steps.\nStrong results.',style:TextStyle(color:Colors.white,fontSize:28,fontWeight:FontWeight.w900,height:1.1)),const SizedBox(height:10),Text('Build the foundations you need, one topic at a time.',style:TextStyle(color:Colors.white.withValues(alpha:.78))),const SizedBox(height:18),Row(children:[Expanded(child:FilledButton(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const LessonPage(subject:'Mathematics',topic:'Algebra foundations'))),style:FilledButton.styleFrom(backgroundColor:gold,foregroundColor:ink),child:const Text('Continue learning'))),const SizedBox(width:10),IconButton.filledTonal(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const PracticePage())),icon:const Icon(Icons.arrow_forward_rounded))])])),
-    const SizedBox(height:22),Row(children:[const Expanded(child:SectionTitle('Your overview')),if(loading)const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2))]),const SizedBox(height:12),Row(children:[Expanded(child:StatCard(icon:Icons.local_fire_department_outlined,label:'Study streak',value:'3 days',tint:Color(0xFFFFE6BC))),const SizedBox(width:10),Expanded(child:StatCard(icon:Icons.task_alt,label:'Topics covered',value:'${remote?['progress']?['completedTopics'] ?? done}',tint:Color(0xFFD9F5E8))),const SizedBox(width:10),Expanded(child:StatCard(icon:Icons.timer_outlined,label:'This week',value:'2.5 hrs',tint:Color(0xFFDCE7FF)))]),
+    const SizedBox(height:22),Row(children:[const Expanded(child:SectionTitle('Your overview')),if(loading)const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2))]),const SizedBox(height:12),Row(children:[Expanded(child:StatCard(icon:Icons.local_fire_department_outlined,label:'Study streak',value:'—',tint:Color(0xFFFFE6BC))),const SizedBox(width:10),Expanded(child:StatCard(icon:Icons.task_alt,label:'Topics covered',value:'${remote?['progress']?['completedTopics'] ?? done}',tint:Color(0xFFD9F5E8))),const SizedBox(width:10),Expanded(child:StatCard(icon:Icons.timer_outlined,label:'This week',value:remote==null?'—':'${remote?['progress']?['minutesStudied'] ?? 0} min',tint:Color(0xFFDCE7FF)))]),
     const SizedBox(height:24),const SectionTitle('Pick up where you left off'),const SizedBox(height:12),...subjects.map((s)=>SubjectTile(name:s[0] as String,icon:s[1] as IconData,progress:(s[2] as double),onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>LessonPage(subject:s[0] as String,topic:'Foundations and core concepts'))))),
     const SizedBox(height:18),Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:const Color(0xFFFFF4D9),borderRadius:BorderRadius.circular(20)),child:const Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(Icons.lightbulb_outline,color:Color(0xFF9B6800)),SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Today’s reminder',style:TextStyle(fontWeight:FontWeight.w800,color:ink)),SizedBox(height:5),Text('Learn the basics first. If a topic feels difficult, revisit its prerequisites before moving on.',style:TextStyle(height:1.4,color:ink))]))]))
   ]);
@@ -78,7 +78,45 @@ class _DashboardPageState extends State<DashboardPage> {
 class SubjectsPage extends StatelessWidget { const SubjectsPage({super.key}); final items=const [['Mathematics','Algebra • Number • Geometry'],['English Language','Comprehension • Summary • Essay'],['Integrated Science','Biology • Chemistry • Physics'],['Social Studies','Governance • Environment • Economy'],['Elective Mathematics','Functions • Calculus • Vectors'],['ICT','Networks • Data • Computing']];
  @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(20),children:[const SectionTitle('Your subjects'),const SizedBox(height:6),const Text('Strengthen prerequisites, then practise WASSCE-style questions.'),const SizedBox(height:16),...items.map((e)=>Card(child:ListTile(contentPadding:const EdgeInsets.all(14),leading:Container(width:48,height:48,decoration:BoxDecoration(color:const Color(0xFFE4ECFF),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.menu_book_rounded,color:blue)),title:Text(e[0],style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text(e[1]),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>TopicListPage(subject:e[0]))))))]); }
 
-class TopicListPage extends StatelessWidget { final String subject; const TopicListPage({super.key,required this.subject}); @override Widget build(BuildContext context){final topics=['Prerequisite check','Core concepts and worked examples','Guided practice','WASSCE-style challenge','Review mistakes'];return Scaffold(appBar:AppBar(title:Text(subject)),body:ListView(padding:const EdgeInsets.all(20),children:[Text('Study path',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.w900)),const SizedBox(height:8),const Text('Move at your own pace. Review earlier ideas whenever you need to.'),const SizedBox(height:18),...topics.asMap().entries.map((e)=>Card(child:ListTile(leading:CircleAvatar(backgroundColor:e.key==0?gold:const Color(0xFFE4ECFF),foregroundColor:ink,child:Text('${e.key+1}')),title:Text(e.value,style:const TextStyle(fontWeight:FontWeight.w700)),trailing:const Icon(Icons.arrow_forward_ios,size:15),onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>LessonPage(subject:subject,topic:e.value))))))]));}}
+class TopicListPage extends StatefulWidget {
+ final String subject;
+ const TopicListPage({super.key,required this.subject});
+ @override State<TopicListPage> createState()=>_TopicListPageState();
+}
+class _TopicListPageState extends State<TopicListPage>{
+ bool loading=false; String error=''; List<Map<String,dynamic>> topics=[];
+ String get code=>({'Mathematics':'MATH','English Language':'ENG','Integrated Science':'SCI','Social Studies':'SOC','Elective Mathematics':'EMATH','ICT':'ICT'}[widget.subject]??'MATH');
+ @override void initState(){super.initState();_loadTopics();}
+ Future<void> _loadTopics()async{
+  setState(()=>{loading=true,error=''});
+  try{
+   final result=await ApiClient.request('/topics?subject=$code&limit=100');
+   final rows=(result['topics'] as List? ?? []);
+   if(!mounted)return;
+   setState(()=>topics=rows.map((e)=>Map<String,dynamic>.from(e as Map)).toList());
+  }catch(e){if(mounted)setState(()=>error='Could not load the live topic catalogue. Check your connection and retry.');}
+  finally{if(mounted)setState(()=>loading=false);}
+ }
+ @override Widget build(BuildContext context)=>Scaffold(
+  appBar:AppBar(title:Text(widget.subject)),
+  body:ListView(padding:const EdgeInsets.all(20),children:[
+   Text('Study path',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.w900)),
+   const SizedBox(height:8),
+   const Text('Live topics from the GetLearny catalogue. Choose a topic to open its lesson.'),
+   const SizedBox(height:18),
+   if(loading)const Center(child:Padding(padding:EdgeInsets.all(28),child:CircularProgressIndicator())),
+   if(error.isNotEmpty)...[Text(error,style:const TextStyle(color:Colors.deepOrange)),TextButton.icon(onPressed:_loadTopics,icon:const Icon(Icons.refresh),label:const Text('Retry'))],
+   if(!loading&&error.isEmpty&&topics.isEmpty)const Text('No topics are published for this subject yet.'),
+   ...topics.map((topic)=>Card(child:ListTile(
+    leading:CircleAvatar(backgroundColor:gold,foregroundColor:ink,child:const Icon(Icons.menu_book_outlined)),
+    title:Text(topic['title']?.toString()??'Topic',style:const TextStyle(fontWeight:FontWeight.w700)),
+    subtitle:Text(topic['description']?.toString()??'Select to study this topic'),
+    trailing:const Icon(Icons.arrow_forward_ios,size:15),
+    onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>LessonPage(subject:widget.subject,topic:topic['title']?.toString()??'Topic'))),
+   )))
+  ])
+ );
+}
 
 class LessonPage extends StatefulWidget {final String subject,topic;const LessonPage({super.key,required this.subject,required this.topic});@override State<LessonPage> createState()=>_LessonPageState();}
 class _LessonPageState extends State<LessonPage>{bool busy=false;String? lesson;String error='';@override void initState(){super.initState();_generate();}Future<void> _generate()async{if(apiBase.isEmpty){setState(()=>error='The learning service URL is not configured.');return;}setState(()=>busy=true);try{final r=await ApiClient.request('/lessons/generate',method:'POST',body:{'subject':widget.subject,'topic':widget.topic,'level':'SHS 3','exam':'WASSCE'});setState(()=>lesson=r['lesson'] as String? ?? 'Lesson unavailable');}catch(e){setState(()=>error='Could not reach the online learning service. Check your connection and sign in, then retry.');lesson=null;}finally{if(mounted)setState(()=>busy=false);}}
@@ -90,12 +128,27 @@ class _PracticePageState extends State<PracticePage>{int q=0;int? selected;int s
 class QuizQ{final String question;final List<String> options;final int answer;final String explanation;const QuizQ(this.question,this.options,this.answer,this.explanation);}
 
 class JournalPage extends StatefulWidget{const JournalPage({super.key});@override State<JournalPage> createState()=>_JournalPageState();}
-class _JournalPageState extends State<JournalPage>{final learned=TextEditingController();final difficult=TextEditingController();final next=TextEditingController();final entries=<Map<String,String>>[];@override void dispose(){learned.dispose();difficult.dispose();next.dispose();super.dispose();}Future<void> save()async{
+class _JournalPageState extends State<JournalPage>{final learned=TextEditingController();final difficult=TextEditingController();final next=TextEditingController();final entries=<Map<String,String>>[];@override void dispose(){learned.dispose();difficult.dispose();next.dispose();super.dispose();}@override void initState(){super.initState();_loadEntries();}
+Future<void> _loadEntries()async{
+ if(ApiClient.token==null)return;
+ try{
+  final result=await ApiClient.request('/journal');
+  final rows=(result['entries'] as List? ?? []);
+  if(!mounted)return;
+  setState(()=>entries
+   ..clear()
+   ..addAll(rows.map((row){final e=Map<String,dynamic>.from(row as Map);return <String,String>{
+    'date':e['created_at']==null?'Recent':DateFormat('d MMM yyyy').format(DateTime.parse(e['created_at'].toString()).toLocal()),
+    'learned':e['learned']?.toString()??'','difficult':e['difficult']?.toString()??'','next':e['next_step']?.toString()??''
+   };})));
+ }catch(_){}
+}
+Future<void> save()async{
  if(learned.text.trim().isEmpty)return;
  if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in from Profile before syncing your journal.')));return;}
  final entry={'date':DateFormat('d MMM yyyy').format(DateTime.now()),'learned':learned.text.trim(),'difficult':difficult.text.trim(),'next':next.text.trim()};
  try{
-   await ApiClient.request('/journal',method:'POST',body:{'learned':entry['learned'],'difficult':entry['difficult'],'next_step':entry['next']});
+  await ApiClient.request('/journal',method:'POST',body:{'learned':entry['learned'],'difficult':entry['difficult'],'next_step':entry['next']});
  }catch(e){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not sync reflection: ${e.toString().replaceFirst('Exception: ','')}')));return;}
  setState(()=>entries.insert(0,entry));
  learned.clear();difficult.clear();next.clear();FocusScope.of(context).unfocus();
