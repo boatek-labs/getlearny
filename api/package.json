@@ -4,13 +4,16 @@
   "private": true,
   "description": "GetLearny REST API for SHS learning and WASSCE preparation",
   "type": "module",
-  "engines": {"node": ">=20"},
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "check": "node --check src/server.js && node --check src/app.js && node --check src/db.js",
     "test": "node --test",
-    "db:migrate": "node src/migrate.js"
+    "db:migrate": "node src/migrate.js",
+    "build": "node --check src/server.js && node --check src/app.js && node --check src/db.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
