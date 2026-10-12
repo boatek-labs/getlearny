@@ -24,7 +24,7 @@ async function migrate() {
     `);
 
     const filenames = (await readdir(migrationsDir))
-      .filter((filename) => /^\\d+_[a-z0-9_-]+\\.sql$/i.test(filename))
+      .filter((filename) => /^[0-9]+_[a-z0-9_-]+[.]sql$/i.test(filename))
       .sort((a, b) => a.localeCompare(b, 'en'));
 
     for (const filename of filenames) {
