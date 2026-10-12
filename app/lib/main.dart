@@ -88,7 +88,7 @@ class _TopicListPageState extends State<TopicListPage>{
  String get code=>({'Mathematics':'MATH','English Language':'ENG','Integrated Science':'SCI','Social Studies':'SOC','Elective Mathematics':'EMATH','ICT':'ICT'}[widget.subject]??'MATH');
  @override void initState(){super.initState();_loadTopics();}
  Future<void> _loadTopics()async{
-  setState(()=>{loading=true,error=''});
+  setState(() { loading=true; error=''; });
   try{
    final result=await ApiClient.request('/topics?subject=$code&limit=100');
    final rows=(result['topics'] as List? ?? []);
