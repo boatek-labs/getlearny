@@ -4,18 +4,10 @@ GetLearny is a WASSCE-focused learning platform for Ghanaian Senior High School 
 
 ## Repository layout
 - `app/` — Flutter Android client.
-- `api/` — Express REST API, PostgreSQL schema/migrations, authentication, lesson/quiz/journal/progress endpoints.
-- `.github/workflows/android-apk.yml` — builds a debug APK on pushes and manual runs; APK is uploaded as a workflow artifact.
-- `.github/workflows/api-checks.yml` — runs backend tests and syntax checks.
-
-## Build Android APK in GitHub Actions
-1. Push this repository to GitHub.
-2. Open **Actions** → **Build GetLearny Android APK**.
-3. Select **Run workflow** (or push a commit to `main`/`master`).
-4. Open the completed run and download the `getlearny-android-apk` artifact.
-5. Extract it; install `app-debug.apk` on an Android device. Android may ask you to allow installation from your browser/file manager.
-
-The workflow creates the standard Android platform scaffolding with Flutter before building, so generated platform files do not need to be committed.
+- `api/` — Express REST API, PostgreSQL migrations, authentication, lesson/quiz/journal/progress endpoints.
+- `web/` — responsive browser learning app.
+- `.github/workflows/android-apk.yml` — builds a debug APK artifact.
+- `.github/workflows/api-checks.yml` — runs backend syntax checks and tests.
 
 ## Run the API locally
 Requirements: Node.js 20+, PostgreSQL 15+.
@@ -28,36 +20,32 @@ npm run db:migrate
 npm run dev
 ```
 
-Set `DATABASE_URL`, `JWT_SECRET` (32+ random characters), and optionally `OPENROUTER_API_KEY` in `api/.env`. Never commit secrets. Without an OpenRouter key, lessons use a safe built-in curriculum template. Set `OPENROUTER_MODEL` to a model available to your account.
+Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and optionally `OPENROUTER_API_KEY` in `api/.env`. Never commit secrets. Without an OpenRouter key, lesson generation uses a built-in fallback lesson.
 
-## Connect app to API
-Set `GETLEARNY_API_URL` when building the app. For a local Android emulator, use `http://10.0.2.2:4000/api/v1`; for a hosted HTTPS API, use its HTTPS `/api/v1` base URL. Example:
+## Preview the web app
+From the repository root, run:
 
 ```bash
-cd app
-flutter run --dart-define=GETLEARNY_API_URL=https://your-api.example.com/api/v1
+python3 -m http.server 8080
 ```
 
-The APK workflow accepts a repository variable named `GETLEARNY_API_URL`; if unset, the app starts in demo/offline mode and can still be navigated.
+Open `http://localhost:8080/web/`. To enable account sync and generated lessons, open Account and set the API base URL to the API's HTTPS `/api/v1` URL. Configure `CORS_ORIGINS` on the API to include the web app's origin.
 
-## Security and production readiness
-- Passwords are hashed with bcrypt; JWT access tokens expire.
-- Authenticated endpoints are user-scoped; request validation, rate limits, CORS allowlist, and security headers are enabled.
-- Use HTTPS, a strong `JWT_SECRET`, managed PostgreSQL backups, object storage for uploaded files, and provider secrets in deployment before serving real users.
-- Google OAuth, a production OCR provider, push notifications, and Play Store signing require credentials/configuration and are intentionally not faked. PDF upload is stored locally in development; configure durable object storage before production.
+## Build the Android APK
+1. Open **Actions** → **Build GetLearny Android APK**.
+2. Select **Run workflow** or push an app/workflow change to `main`.
+3. Download the `getlearny-android-apk` artifact from the completed run.
 
-## Main capabilities
-- SHS learning dashboard and subject progress
-- Ghana/WASSCE-oriented lesson generation with optional OpenRouter
-- Topic practice quizzes with server-scored answers
-- Learning journal and test-score tracking
-- Revision priorities and learning history
-- PDF upload endpoint with safe file limits and text extraction hook point
-- User registration/login, profile, API health, and PostgreSQL migrations
-- Flutter Android client with responsive navigation and API/offline fallback
+The workflow generates Android platform scaffolding before building. For a local build, install Flutter and run `flutter pub get` then `flutter run` inside `app/`.
 
-## License
-Private project. Add a license before redistributing.
+## Current functionality
+- SHS/WASSCE-oriented subject paths and practice
+- Optional OpenRouter lesson generation with a built-in fallback
+- Registration/login with hashed passwords and expiring JWTs
+- User-scoped learning logs, test results, and journal entries
+- PostgreSQL migration runner with migration history
+- PDF/plain-text upload intake (OCR/background extraction is not implemented yet)
+- Browser app and Flutter client with offline/demo navigation
 
-## Web app
-The `web/` folder contains a responsive browser app with dashboard, subjects, lesson generation, quick practice, learning journal, test tracker, sign-in/register, and API connection settings. For local preview, run `python3 -m http.server 8080` from the repository root and open `http://localhost:8080/web/`. Configure the API URL in Account; the API CORS allowlist must include the web origin.
+## Production checklist
+Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, email verification and password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Google OAuth, OCR, push notifications, and Play Store signing require real provider credentials and are not faked by this starter.
