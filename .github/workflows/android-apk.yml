@@ -58,11 +58,8 @@ jobs:
         env:
           GETLEARNY_API_URL: ${{ vars.GETLEARNY_API_URL }}
         run: |
-          if [ -n "$GETLEARNY_API_URL" ]; then
-            flutter build apk --debug --dart-define=GETLEARNY_API_URL="$GETLEARNY_API_URL"
-          else
-            flutter build apk --debug
-          fi
+          GETLEARNY_API_URL="${GETLEARNY_API_URL:-https://getlearny.vercel.app/api/v1}"
+          flutter build apk --debug --dart-define=GETLEARNY_API_URL="$GETLEARNY_API_URL"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
