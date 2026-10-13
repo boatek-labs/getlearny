@@ -1,34 +1,37 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const apiBase = String.fromEnvironment('GETLEARNY_API_URL', defaultValue: 'https://getlearny.vercel.app/api/v1');
-const ink = Color(0xFF10233F);
-const blue = Color(0xFF235DDB);
-const gold = Color(0xFFFFC857);
-const paper = Color(0xFFF5F7FB);
+const ink = Color(0xFF123E30);
+const blue = Color(0xFF267452);
+const mint = Color(0xFFC9F1DF);
+const gold = Color(0xFFE8B84C);
+const paper = Color(0xFFF5FAF7);
+final ValueNotifier<bool> darkModeNotifier = ValueNotifier<bool>(false);
 
 void main() => runApp(const GetLearnyApp());
 
-class GetLearnyApp extends StatelessWidget {
+class GetLearnyApp extends StatefulWidget {
   const GetLearnyApp({super.key});
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'GetLearny', debugShowCheckedModeBanner: false,
-    theme: ThemeData(useMaterial3: true, scaffoldBackgroundColor: paper,
-      colorScheme: ColorScheme.fromSeed(seedColor: blue, primary: blue, secondary: gold),
-      appBarTheme: const AppBarTheme(backgroundColor: paper, foregroundColor: ink, elevation: 0),
-      inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
-      cardTheme: CardThemeData(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)))),
-    home: const Shell(),
-  );
+  @override State<GetLearnyApp> createState() => _GetLearnyAppState();
 }
-
+class _GetLearnyAppState extends State<GetLearnyApp> {
+  @override void initState(){super.initState();_loadTheme();}
+  Future<void> _loadTheme() async {final p=await SharedPreferences.getInstance();darkModeNotifier.value=p.getBool('dark_mode')??false;}
+  @override Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: darkModeNotifier,
+    builder:(context,dark,_)=>MaterialApp(
+      title:'GetLearny',debugShowCheckedModeBanner:false,
+      theme:ThemeData(useMaterial3:true,scaffoldBackgroundColor:paper,colorScheme:ColorScheme.fromSeed(seedColor:blue,primary:blue,secondary:gold,brightness:Brightness.light),appBarTheme:const AppBarTheme(backgroundColor:paper,foregroundColor:ink,elevation:0),inputDecorationTheme:InputDecorationTheme(filled:true,fillColor:Colors.white,border:OutlineInputBorder(borderRadius:BorderRadius.all(Radius.circular(14)),borderSide:BorderSide.none),contentPadding:const EdgeInsets.symmetric(horizontal:16,vertical:14)),cardTheme:CardThemeData(color:Colors.white,elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)))),
+      darkTheme:ThemeData(useMaterial3:true,brightness:Brightness.dark,colorScheme:ColorScheme.fromSeed(seedColor:mint,primary:mint,secondary:gold,brightness:Brightness.dark),scaffoldBackgroundColor:const Color(0xFF101B17),appBarTheme:const AppBarTheme(backgroundColor:Color(0xFF101B17),foregroundColor:Color(0xFFE6F4EC),elevation:0),cardTheme:CardThemeData(color:const Color(0xFF172820),elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)))),
+      themeMode:dark?ThemeMode.dark:ThemeMode.light,home:const Shell()));
+}
 class ApiClient {
   static String? token;
   static Future<Map<String, dynamic>> request(String path, {String method='GET', Map<String,dynamic>? body}) async {
@@ -38,9 +41,20 @@ class ApiClient {
       ? http.post(uri, headers: _headers(), body: jsonEncode(body ?? {}))
       : method == 'PATCH'
         ? http.patch(uri, headers: _headers(), body: jsonEncode(body ?? {}))
-        : http.get(uri, headers: _headers())).timeout(const Duration(seconds: 12));
+        : http.get(uri, headers: _headers())).timeout(const Duration(seconds: 20));
     final decoded = response.body.isEmpty ? <String,dynamic>{} : jsonDecode(response.body) as Map<String,dynamic>;
     if (response.statusCode < 200 || response.statusCode >= 300) throw Exception(decoded['error'] ?? 'Request failed');
+    return decoded;
+  }
+  static Future<Map<String,dynamic>> upload(String path, PlatformFile file) async {
+    if(token==null)throw Exception('Sign in first');
+    final request=http.MultipartRequest('POST',Uri.parse('$apiBase$path'));
+    request.headers['Authorization']='Bearer $token';
+    request.files.add(http.MultipartFile.fromBytes('file',file.bytes!,filename:file.name));
+    final streamed=await request.send().timeout(const Duration(seconds:30));
+    final response=await http.Response.fromStream(streamed);
+    final decoded=response.body.isEmpty?<String,dynamic>{}:jsonDecode(response.body) as Map<String,dynamic>;
+    if(response.statusCode<200||response.statusCode>=300)throw Exception(decoded['error']??'Upload failed');
     return decoded;
   }
   static Map<String,String> _headers() => {'Content-Type':'application/json', if (token != null) 'Authorization':'Bearer $token'};
@@ -49,13 +63,13 @@ class ApiClient {
 class Shell extends StatefulWidget { const Shell({super.key}); @override State<Shell> createState()=>_ShellState(); }
 class _ShellState extends State<Shell> {
   int index=0; String name='Learner'; bool signedIn=false;
-  final pages = const [DashboardPage(), SubjectsPage(), PracticePage(), JournalPage(), ProfilePage()];
+  final pages = const [DashboardPage(), SubjectsPage(), PracticePage(), JournalPage(), ProfilePage(), DocumentsPage()];
   @override void initState(){ super.initState(); _restore(); }
   Future<void> _restore() async { final p=await SharedPreferences.getInstance(); ApiClient.token=p.getString('token'); if(mounted)setState((){name=p.getString('name')??'Learner'; signedIn=ApiClient.token!=null;}); }
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar: AppBar(title: Row(children:[Container(width:36,height:36,decoration:BoxDecoration(color:ink,borderRadius:BorderRadius.circular(11)),child:const Center(child:Text('G',style:TextStyle(color:gold,fontWeight:FontWeight.w900,fontSize:22)))),const SizedBox(width:10),const Text('GetLearny',style:TextStyle(fontWeight:FontWeight.w800,letterSpacing:-.5)),const Spacer(),IconButton(onPressed:()=>setState(()=>index=4),icon:const Icon(Icons.account_circle_outlined))])),
+    appBar: AppBar(title: Row(children:[Container(width:36,height:36,decoration:BoxDecoration(color:ink,borderRadius:BorderRadius.circular(11)),child:const Center(child:Text('G',style:TextStyle(color:gold,fontWeight:FontWeight.w900,fontSize:22)))),const SizedBox(width:10),const Text('GetLearny',style:TextStyle(fontWeight:FontWeight.w800,letterSpacing:-.5)),const Spacer(),IconButton(tooltip:darkModeNotifier.value?'Switch to light mode':'Switch to dark mode',onPressed:()async{darkModeNotifier.value=!darkModeNotifier.value;final p=await SharedPreferences.getInstance();await p.setBool('dark_mode',darkModeNotifier.value);},icon:Icon(darkModeNotifier.value?Icons.light_mode_outlined:Icons.dark_mode_outlined)),IconButton(onPressed:()=>setState(()=>index=4),icon:const Icon(Icons.account_circle_outlined))])),
     body: SafeArea(child:IndexedStack(index:index,children: pages.map((p)=>p is DashboardPage ? DashboardPage(name:name) : p).toList())),
-    bottomNavigationBar: NavigationBar(selectedIndex:index,onDestinationSelected:(i)=>setState(()=>index=i),destinations:const [NavigationDestination(icon:Icon(Icons.grid_view_rounded),label:'Home'),NavigationDestination(icon:Icon(Icons.menu_book_rounded),label:'Subjects'),NavigationDestination(icon:Icon(Icons.quiz_outlined),label:'Practice'),NavigationDestination(icon:Icon(Icons.edit_note_rounded),label:'Journal'),NavigationDestination(icon:Icon(Icons.person_outline),label:'Profile')]),
+    bottomNavigationBar: NavigationBar(selectedIndex:index,onDestinationSelected:(i)=>setState(()=>index=i),destinations:const [NavigationDestination(icon:Icon(Icons.grid_view_rounded),label:'Home'),NavigationDestination(icon:Icon(Icons.menu_book_rounded),label:'Subjects'),NavigationDestination(icon:Icon(Icons.quiz_outlined),label:'Practice'),NavigationDestination(icon:Icon(Icons.edit_note_rounded),label:'Journal'),NavigationDestination(icon:Icon(Icons.person_outline),label:'Profile'),NavigationDestination(icon:Icon(Icons.folder_open_outlined),label:'Files')]),
   );
 }
 
