@@ -114,6 +114,29 @@ jobs:
           print('Configured core library desugaring in', path)
           PY
 
+
+      - name: Set Android compile SDK required by file picker plugins
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/android/app/build.gradle.kts')
+          if not path.exists():
+              path = Path('app/android/app/build.gradle')
+          text = path.read_text()
+          if path.suffix == '.kts':
+              import re
+              text, count = re.subn(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', text, count=1)
+              if count == 0:
+                  text, count = re.subn(r'compileSdk\s+\d+', 'compileSdk 36', text, count=1)
+          else:
+              import re
+              text, count = re.subn(r'compileSdk\s+\d+', 'compileSdk 36', text, count=1)
+          if count == 0:
+              raise SystemExit('Could not locate compileSdk declaration')
+          path.write_text(text)
+          print('Set compileSdk to 36 in', path)
+          PY
+
       - name: Resolve packages
         working-directory: app
         run: flutter pub get
