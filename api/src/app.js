@@ -11,6 +11,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import webPush from 'web-push';
+import pdfParse from 'pdf-parse';
 import { query, health } from './db.js';
 
 const app=express();
@@ -148,7 +149,26 @@ Close your notes and explain the main idea in three sentences. Then attempt prac
 }));
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||12)*1024*1024,files:1},fileFilter:(_req,file,cb)=>{const allowed=['application/pdf','text/plain'];if(!allowed.includes(file.mimetype))return cb(new Error('Only PDF and plain-text files are accepted'));cb(null,true)}});const avatarUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:2*1024*1024,files:1},fileFilter:(_req,file,cb)=>{if(!['image/jpeg','image/png','image/webp'].includes(file.mimetype))return cb(new Error('Profile pictures must be JPG, PNG or WebP'));cb(null,true)}});
 app.post('/api/v1/profile/avatar',auth,avatarUpload.single('file'),asyncRoute(async(req,res)=>{if(!req.file)return fail(res,400,'Choose a JPG, PNG or WebP profile picture');const avatar_data='data:'+req.file.mimetype+';base64,'+req.file.buffer.toString('base64');const r=await query('UPDATE users SET avatar_data=$1,updated_at=now() WHERE id=$2 RETURNING id,name,email,role,avatar_data,created_at',[avatar_data,req.user.sub]);res.json({user:r.rows[0],message:'Profile picture updated'})}));
-app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res)=>{if(!req.file)return fail(res,400,'Select a PDF or text file');const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,processing_status) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,original_name,mime_type,size_bytes,processing_status,created_at',[req.user.sub,path.basename(req.file.originalname).slice(0,255),'database',req.file.mimetype,req.file.size,req.file.buffer,'uploaded']);res.status(201).json({document:r.rows[0],message:'Study material saved to your account.'})}));
+app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res)=>{
+ if(!req.file)return fail(res,400,'Select a PDF or text file');
+ let extractedText='',processingStatus='uploaded';
+ if(req.file.mimetype==='text/plain'){extractedText=req.file.buffer.toString('utf8').slice(0,150000);processingStatus=extractedText.trim()?'ready':'uploaded';}
+ else{try{const parsed=await pdfParse(req.file.buffer);extractedText=String(parsed.text||'').slice(0,150000);processingStatus=extractedText.trim()?'ready':'needs_ocr';}catch{processingStatus='needs_ocr';}}
+ const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,extracted_text,processing_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,original_name,mime_type,size_bytes,processing_status,created_at',[req.user.sub,path.basename(req.file.originalname).slice(0,255),'database',req.file.mimetype,req.file.size,req.file.buffer,extractedText,processingStatus]);
+ res.status(201).json({document:r.rows[0],message:processingStatus==='needs_ocr'?'File saved. It looks like a scanned or image-only PDF; OCR is required to read its pages.':'Study material saved and text extracted.'});
+}));
+app.post('/api/v1/documents/:id/ask',auth,asyncRoute(async(req,res)=>{
+ const parsed=z.object({question:z.string().trim().min(3).max(1000)}).safeParse(req.body);
+ if(!parsed.success)return fail(res,400,'Enter a question of 3 to 1000 characters');
+ const result=await query('SELECT original_name,extracted_text,processing_status FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);
+ if(!result.rowCount)return fail(res,404,'Study material not found');
+ const doc=result.rows[0];if(!doc.extracted_text?.trim())return fail(res,422,doc.processing_status==='needs_ocr'?'This PDF appears to be scanned or image-only. OCR must be configured before the tutor can read it.':'No readable text was extracted from this file.');
+ if(!process.env.OPENROUTER_API_KEY)return fail(res,503,'Document AI tutoring needs OPENROUTER_API_KEY configured in the deployment.');
+ const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,3);
+ for(const model of models){try{const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENROUTER_API_KEY}`,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':process.env.OPENROUTER_APP_NAME||'GetLearny'},body:JSON.stringify({model,messages:[{role:'system',content:'You are a supportive Ghana SHS tutor. Answer the student using the supplied study document as the primary source. Explain concepts clearly, use age-appropriate language, show a short example when useful, and say when the document does not contain enough information. Do not invent quotations or pretend unsupported facts came from the file.'},{role:'user',content:`Study file: ${doc.original_name}\n\nDOCUMENT EXCERPT:\n${doc.extracted_text.slice(0,30000)}\n\nSTUDENT QUESTION:\n${parsed.data.question}`}],temperature:0.3,max_tokens:1000}),signal:AbortSignal.timeout(10000)});if(!response.ok)continue;const data=await response.json();const answer=data.choices?.[0]?.message?.content;if(typeof answer==='string'&&answer.trim())return res.json({answer:answer.trim(),source:doc.original_name,generatedBy:'openrouter'});}catch{/* try the next configured model */}}
+ return fail(res,502,'The document tutor could not reach an available AI model. Please try again.');
+}));
+
 app.get('/api/v1/documents',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,original_name,mime_type,size_bytes,processing_status,created_at FROM uploaded_documents WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[req.user.sub]);res.json({documents:r.rows})}));
 app.get('/api/v1/documents/:id',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT original_name,mime_type,content FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);if(!r.rowCount)return fail(res,404,'Document not found');res.setHeader('Content-Type',r.rows[0].mime_type);res.setHeader('Content-Disposition','attachment; filename="study-material"');res.send(r.rows[0].content)}));
 app.use((err,_req,res,_next)=>{if(err instanceof multer.MulterError)return fail(res,err.code==='LIMIT_FILE_SIZE'?413:400,err.code==='LIMIT_FILE_SIZE'?'File is too large':'Upload failed');if(err.message==='Origin not allowed by CORS')return fail(res,403,err.message);console.error(err);return fail(res,500,process.env.NODE_ENV==='production'?'Unexpected server error':err.message||'Unexpected server error')});
