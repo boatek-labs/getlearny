@@ -113,3 +113,64 @@ html[data-theme="dark"] .exam-card,html[data-theme="dark"] .soft-pill,html[data-
 html[data-theme="dark"] .profile-link b{color:#fff}html[data-theme="dark"] .profile-link small{color:#D0CDEB}
 html[data-theme="dark"] .avatar img,.avatar img,.profile-photo-preview img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
 .avatar{overflow:hidden}
+
+
+/* Dark-mode contrast sweep: override hard-coded light surfaces across every component. */
+html[data-theme="dark"]{
+ color-scheme:dark;
+ --ink:#F4F3FF;--muted:#B9B9D0;--paper:#10111F;--line:#303148;--white:#191A2D;
+ --blue-soft:#292443;--gold-soft:#1B303D;
+}
+html[data-theme="dark"] body,
+html[data-theme="dark"] .main,
+html[data-theme="dark"] .view{background:#10111F;color:#F4F3FF}
+html[data-theme="dark"] .sidebar{background:#141526;color:#F4F3FF;border-color:#303148}
+html[data-theme="dark"] .topbar{background:rgba(16,17,31,.96);border-color:#303148}
+html[data-theme="dark"] .brand,html[data-theme="dark"] .breadcrumb b,
+html[data-theme="dark"] h1,html[data-theme="dark"] h2,html[data-theme="dark"] h3,
+html[data-theme="dark"] .section-heading h2,html[data-theme="dark"] .lesson-panel h2,
+html[data-theme="dark"] .lesson-panel h3,html[data-theme="dark"] .stat-card b,
+html[data-theme="dark"] .subject-meta b,html[data-theme="dark"] .record b,
+html[data-theme="dark"] .form-card label,html[data-theme="dark"] .profile-photo-copy b{color:#F4F3FF}
+html[data-theme="dark"] .stat-card,html[data-theme="dark"] .subject-card,
+html[data-theme="dark"] .form-card,html[data-theme="dark"] .practice-card,
+html[data-theme="dark"] .record,html[data-theme="dark"] .lesson-panel,
+html[data-theme="dark"] .icon-button,html[data-theme="dark"] .quiz-option,
+html[data-theme="dark"] .auth-toggle,html[data-theme="dark"] .auth-toggle button.selected,
+html[data-theme="dark"] .topic-choice,html[data-theme="dark"] .document-record,
+html[data-theme="dark"] .profile-photo-card,html[data-theme="dark"] .notification-card{
+ background:#191A2D!important;color:#F4F3FF!important;border-color:#303148!important;box-shadow:none
+}
+html[data-theme="dark"] .tip-card,html[data-theme="dark"] .feedback,
+html[data-theme="dark"] .ai-answer,html[data-theme="dark"] .exam-card,
+html[data-theme="dark"] .soft-pill,html[data-theme="dark"] .mini-icon{
+ background:#23213A!important;color:#E2DEFF!important;border-color:#383653
+}
+html[data-theme="dark"] .form-card input,html[data-theme="dark"] .form-card textarea,
+html[data-theme="dark"] input,html[data-theme="dark"] textarea,html[data-theme="dark"] select{
+ background:#10111F!important;color:#F4F3FF!important;border-color:#3A3B56!important
+}
+html[data-theme="dark"] input::placeholder,html[data-theme="dark"] textarea::placeholder{color:#9295B0!important}
+html[data-theme="dark"] .lead,html[data-theme="dark"] p,html[data-theme="dark"] .breadcrumb,
+html[data-theme="dark"] .section-heading p,html[data-theme="dark"] .stat-card>span,
+html[data-theme="dark"] .stat-card small,html[data-theme="dark"] .subject-meta small,
+html[data-theme="dark"] .profile-link small,html[data-theme="dark"] .exam-card p,
+html[data-theme="dark"] footer,html[data-theme="dark"] .record p,
+html[data-theme="dark"] .profile-photo-copy p{color:#B9B9D0}
+html[data-theme="dark"] .profile-link{background:#191A2D!important;border-color:#34354F}
+html[data-theme="dark"] .nav-item{color:#C4C5DA}
+html[data-theme="dark"] .nav-item:hover,html[data-theme="dark"] .nav-item.active{background:#302852;color:#D4CBFF}
+html[data-theme="dark"] .quiz-option:hover,html[data-theme="dark"] .quiz-option.selected{background:#24223B!important;border-color:#7869C8!important}
+html[data-theme="dark"] .quiz-option.correct{background:#17352F!important;border-color:#2E8E77!important}
+html[data-theme="dark"] .quiz-option.wrong{background:#3B242A!important;border-color:#A45B69!important}
+html[data-theme="dark"] .progress-line{background:#303148}
+html[data-theme="dark"] .profile-photo-preview{background:#292443;color:#D4CBFF;border-color:#303148}
+html[data-theme="dark"] .button-light{background:#292443;color:#D4CBFF}
+html[data-theme="dark"] .document-type{background:#292443;color:#D4CBFF}
+html[data-theme="dark"] .hero{color:#fff}
+html[data-theme="dark"] .hero h2{color:#fff}
+html[data-theme="dark"] .hero p{color:#E0DFF2}
+html[data-theme="dark"] .floating-note{background:#191A2D;color:#F4F3FF}
+html[data-theme="dark"] .toast{background:#282443;color:#fff}
+html[data-theme="dark"] .avatar img, .avatar img,.profile-photo-preview img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+.avatar{overflow:hidden}
