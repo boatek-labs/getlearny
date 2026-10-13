@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import webPush from 'web-push';
 import { query, health } from './db.js';
 
 const app=express();
@@ -27,10 +28,36 @@ app.use('/api/v1',rateLimit({windowMs:60*1000,limit:120,standardHeaders:true,leg
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
 const fail=(res,status,error)=>res.status(status).json({error});
 const envReady=()=>Boolean(process.env.JWT_SECRET&&process.env.JWT_SECRET.length>=32);
+const pushReady=()=>Boolean(process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT);
+function configurePush(){if(pushReady())webPush.setVapidDetails(process.env.VAPID_SUBJECT,process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY)}
+configurePush();
 function auth(req,res,next){const value=req.headers.authorization||'';const token=value.startsWith('Bearer ')?value.slice(7):'';if(!token||!envReady())return fail(res,401,'Sign in required');try{req.user=jwt.verify(token,process.env.JWT_SECRET,{issuer:'getlearny-api',audience:'getlearny-app'});next()}catch{return fail(res,401,'Session expired. Sign in again.')}}
 const registration=z.object({name:z.string().trim().min(2).max(120),email:z.string().trim().email().max(254),password:z.string().min(8).max(128)});
 const login=z.object({email:z.string().trim().email().max(254),password:z.string().min(8).max(128)});
 const journalSchema=z.object({learned:z.string().trim().min(1).max(5000),difficult:z.string().max(5000).optional().default(''),next_step:z.string().max(2000).optional().default('')});
+
+app.get('/api/v1/notifications/public-key',(_req,res)=>res.json({configured:pushReady(),publicKey:pushReady()?process.env.VAPID_PUBLIC_KEY:null}));
+app.post('/api/v1/notifications/subscriptions',auth,asyncRoute(async(req,res)=>{
+ if(!pushReady())return fail(res,503,'Background push notifications are not configured yet');
+ const schema=z.object({subscription:z.object({endpoint:z.string().url().max(2048),keys:z.object({p256dh:z.string().min(8),auth:z.string().min(8)})}),timezone:z.string().max(100).optional().default('Africa/Accra'),reminderTime:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().default('19:00'),dailyReminder:z.boolean().optional().default(true)});
+ const parsed=schema.safeParse(req.body);if(!parsed.success)return fail(res,400,'Invalid notification subscription');
+ const {subscription,timezone,reminderTime,dailyReminder}=parsed.data;
+ await query('INSERT INTO notification_subscriptions(user_id,endpoint,subscription,timezone,reminder_time,daily_reminder_enabled,updated_at) VALUES($1,$2,$3::jsonb,$4,$5::time,$6,now()) ON CONFLICT(endpoint) DO UPDATE SET user_id=EXCLUDED.user_id,subscription=EXCLUDED.subscription,timezone=EXCLUDED.timezone,reminder_time=EXCLUDED.reminder_time,daily_reminder_enabled=EXCLUDED.daily_reminder_enabled,updated_at=now()',[req.user.sub,subscription.endpoint,JSON.stringify(subscription),timezone,reminderTime,dailyReminder]);
+ res.status(201).json({saved:true,backgroundPush:true});
+}));
+app.delete('/api/v1/notifications/subscriptions',auth,asyncRoute(async(req,res)=>{
+ const endpoint=String(req.body?.endpoint||'');if(!endpoint)return fail(res,400,'Subscription endpoint is required');
+ await query('DELETE FROM notification_subscriptions WHERE user_id=$1 AND endpoint=$2',[req.user.sub,endpoint]);res.json({removed:true});
+}));
+app.post('/api/v1/notifications/test',auth,asyncRoute(async(req,res)=>{
+ if(!pushReady())return fail(res,503,'Background push notifications need VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT configuration');
+ const r=await query('SELECT id,subscription FROM notification_subscriptions WHERE user_id=$1',[req.user.sub]);if(!r.rowCount)return fail(res,404,'No push subscription is saved for this account on this device');
+ const payload=JSON.stringify({title:'GetLearny test notification',body:'Your device can receive GetLearny notifications.',url:'/',tag:'getlearny-push-test'});
+ const results=await Promise.allSettled(r.rows.map(async row=>{try{await webPush.sendNotification(row.subscription,payload)}catch(error){if(error.statusCode===404||error.statusCode===410)await query('DELETE FROM notification_subscriptions WHERE id=$1',[row.id]);throw error}}));
+ const sent=results.filter(x=>x.status==='fulfilled').length;if(!sent)return fail(res,502,'Push delivery failed. Check the VAPID configuration and browser subscription.');
+ res.json({sent,message:'Test push notification sent.'});
+}));
+
 app.get('/api/v1/health',asyncRoute(async(_req,res)=>{const db=await health();res.status(db.configured&&!db.connected?503:200).json({status:db.connected?'ok':db.configured?'degraded':'unconfigured',service:'getlearny-api',database:db,now:new Date().toISOString()})}));
 app.post('/api/v1/auth/register',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=registration.safeParse(req.body);if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);const {name,email,password}=parsed.data;const hash=await bcrypt.hash(password,12);try{const r=await query('INSERT INTO users(name,email,password_hash) VALUES($1,$2,$3) RETURNING id,name,email,role,avatar_data,created_at',[name,email.toLowerCase(),hash]);const user=r.rows[0];const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.status(201).json({token,user})}catch(e){if(e.code==='23505')return fail(res,409,'An account with this email already exists');throw e}}));
 app.post('/api/v1/auth/login',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=login.safeParse(req.body);if(!parsed.success)return fail(res,400,'Enter a valid email and password');const r=await query('SELECT id,name,email,role,avatar_data,password_hash,created_at FROM users WHERE email=$1',[parsed.data.email.toLowerCase()]);const user=r.rows[0];if(!user||!await bcrypt.compare(parsed.data.password,user.password_hash))return fail(res,401,'Email or password is incorrect');delete user.password_hash;const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.json({token,user})}));
