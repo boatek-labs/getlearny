@@ -20,7 +20,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and optionally `OPENROUTER_API_KEY` in `api/.env`. Never commit secrets. Without an OpenRouter key, lesson generation uses a built-in fallback lesson. Copy the root `.env.example` or `api/.env.example` and replace placeholders locally.
+Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and optionally `OPENROUTER_API_KEY` in `api/.env`. For background browser push, also configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT`; generate the key pair with `npx web-push generate-vapid-keys` and never commit the private key. Without an OpenRouter key, lesson generation uses a built-in fallback lesson. Copy the root `.env.example` or `api/.env.example` and replace placeholders locally.
 
 ## Deploy to Vercel + Neon PostgreSQL
 
@@ -28,10 +28,14 @@ Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and optio
 2. Vercel uses `vercel.json`: it serves the `web/` directory and routes `/api/*` to the Express serverless handler in `api/[...path].js`.
 3. In **Vercel → Project → Settings → Environment Variables**, add `DATABASE_URL` using your Neon pooled connection string, `JWT_SECRET` as a newly generated random secret of at least 32 characters, and `APP_URL` as the production HTTPS URL. Add `OPENROUTER_API_KEY` for AI lesson generation, `OPENROUTER_MODEL=openrouter/free`, and optional `OPENROUTER_FALLBACK_MODELS` as a comma-separated list of free model IDs. Never commit actual secrets.
 4. Add `CORS_ORIGINS` only when using a separate frontend domain; for a same-origin deployment the app works at `/api/v1` by default. Include the production URL if you set a restrictive allow-list.
-5. Run the database migrations once against Neon from a trusted terminal after setting `DATABASE_URL`: `npm run db:migrate`. Do not run migrations as part of every Vercel build.
+5. Run the database migrations once against Neon from a trusted terminal after setting `DATABASE_URL`: `npm run db:migrate`. Do not run migrations as part of every Vercel build. The migration workflow can also run after migration files are merged, provided the GitHub Actions `DATABASE_URL` secret is configured.
 6. Redeploy after setting environment variables. Check `https://YOUR-VERCEL-DOMAIN/api/v1/health` and confirm the database reports connected.
 
 **Important:** Vercel's local filesystem is ephemeral. Current document uploads use temporary storage there, so uploaded files will not be durable across invocations. Configure private object storage before relying on document uploads in production.
+
+## Device notifications
+
+The website uses a service worker and the browser Notification API for device-level alerts. Signed-in users can save Web Push subscriptions so notifications can be delivered when the site is closed, once VAPID keys are configured in the deployment. The Android app uses native local notifications and supports a daily reminder that can fire when the app is closed. Browser notification permission is required; delivery depends on the operating system and browser settings.
 
 ## Preview the web app
 From the repository root, run:
