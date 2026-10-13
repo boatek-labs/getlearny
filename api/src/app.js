@@ -53,7 +53,7 @@ app.delete('/api/v1/notifications/subscriptions',auth,asyncRoute(async(req,res)=
 
 app.post('/api/v1/notifications/dispatch-reminders',asyncRoute(async(req,res)=>{
  if(!process.env.CRON_SECRET||req.headers.authorization!==`Bearer ${process.env.CRON_SECRET}`)return fail(res,401,'Scheduled notification authorization failed');
- if(!pushReady())return fail(res,503,'Background push notifications are not configured');
+ if(!pushReady())return res.json({skipped:true,reason:'Background push notifications are not configured'});
  const due=await query("UPDATE notification_subscriptions SET last_reminder_date=(now() AT TIME ZONE timezone)::date,updated_at=now() WHERE daily_reminder_enabled=true AND last_reminder_date IS DISTINCT FROM (now() AT TIME ZONE timezone)::date AND EXTRACT(HOUR FROM now() AT TIME ZONE timezone)=EXTRACT(HOUR FROM reminder_time) AND floor(EXTRACT(MINUTE FROM now() AT TIME ZONE timezone)/5)=floor(EXTRACT(MINUTE FROM reminder_time)/5) RETURNING id,subscription");
  let sent=0,expired=0,failed=0;
  for(const row of due.rows){try{await webPush.sendNotification(row.subscription,JSON.stringify({title:'Time for a GetLearny study session',body:'Take one small step toward your WASSCE goals.',url:'/',tag:'getlearny-daily-reminder'}));sent++;}catch(error){failed++;if(error.statusCode===404||error.statusCode===410){await query('DELETE FROM notification_subscriptions WHERE id=$1',[row.id]);expired++;}}}
