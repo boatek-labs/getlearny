@@ -1,34 +1,37 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const apiBase = String.fromEnvironment('GETLEARNY_API_URL', defaultValue: 'https://getlearny.vercel.app/api/v1');
-const ink = Color(0xFF10233F);
-const blue = Color(0xFF235DDB);
-const gold = Color(0xFFFFC857);
-const paper = Color(0xFFF5F7FB);
+const ink = Color(0xFF123E30);
+const blue = Color(0xFF267452);
+const mint = Color(0xFFC9F1DF);
+const gold = Color(0xFFE8B84C);
+const paper = Color(0xFFF5FAF7);
+final ValueNotifier<bool> darkModeNotifier = ValueNotifier<bool>(false);
 
 void main() => runApp(const GetLearnyApp());
 
-class GetLearnyApp extends StatelessWidget {
+class GetLearnyApp extends StatefulWidget {
   const GetLearnyApp({super.key});
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'GetLearny', debugShowCheckedModeBanner: false,
-    theme: ThemeData(useMaterial3: true, scaffoldBackgroundColor: paper,
-      colorScheme: ColorScheme.fromSeed(seedColor: blue, primary: blue, secondary: gold),
-      appBarTheme: const AppBarTheme(backgroundColor: paper, foregroundColor: ink, elevation: 0),
-      inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
-      cardTheme: CardThemeData(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)))),
-    home: const Shell(),
-  );
+  @override State<GetLearnyApp> createState() => _GetLearnyAppState();
 }
-
+class _GetLearnyAppState extends State<GetLearnyApp> {
+  @override void initState(){super.initState();_loadTheme();}
+  Future<void> _loadTheme() async {final p=await SharedPreferences.getInstance();darkModeNotifier.value=p.getBool('dark_mode')??false;}
+  @override Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: darkModeNotifier,
+    builder:(context,dark,_)=>MaterialApp(
+      title:'GetLearny',debugShowCheckedModeBanner:false,
+      theme:ThemeData(useMaterial3:true,scaffoldBackgroundColor:paper,colorScheme:ColorScheme.fromSeed(seedColor:blue,primary:blue,secondary:gold,brightness:Brightness.light),appBarTheme:const AppBarTheme(backgroundColor:paper,foregroundColor:ink,elevation:0),inputDecorationTheme:InputDecorationTheme(filled:true,fillColor:Colors.white,border:OutlineInputBorder(borderRadius:BorderRadius.all(Radius.circular(14)),borderSide:BorderSide.none),contentPadding:const EdgeInsets.symmetric(horizontal:16,vertical:14)),cardTheme:CardThemeData(color:Colors.white,elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)))),
+      darkTheme:ThemeData(useMaterial3:true,brightness:Brightness.dark,colorScheme:ColorScheme.fromSeed(seedColor:mint,primary:mint,secondary:gold,brightness:Brightness.dark),scaffoldBackgroundColor:const Color(0xFF101B17),appBarTheme:const AppBarTheme(backgroundColor:Color(0xFF101B17),foregroundColor:Color(0xFFE6F4EC),elevation:0),cardTheme:CardThemeData(color:const Color(0xFF172820),elevation:0,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20)))),
+      themeMode:dark?ThemeMode.dark:ThemeMode.light,home:const Shell()));
+}
 class ApiClient {
   static String? token;
   static Future<Map<String, dynamic>> request(String path, {String method='GET', Map<String,dynamic>? body}) async {
@@ -38,9 +41,20 @@ class ApiClient {
       ? http.post(uri, headers: _headers(), body: jsonEncode(body ?? {}))
       : method == 'PATCH'
         ? http.patch(uri, headers: _headers(), body: jsonEncode(body ?? {}))
-        : http.get(uri, headers: _headers())).timeout(const Duration(seconds: 12));
+        : http.get(uri, headers: _headers())).timeout(const Duration(seconds: 20));
     final decoded = response.body.isEmpty ? <String,dynamic>{} : jsonDecode(response.body) as Map<String,dynamic>;
     if (response.statusCode < 200 || response.statusCode >= 300) throw Exception(decoded['error'] ?? 'Request failed');
+    return decoded;
+  }
+  static Future<Map<String,dynamic>> upload(String path, PlatformFile file) async {
+    if(token==null)throw Exception('Sign in first');
+    final request=http.MultipartRequest('POST',Uri.parse('$apiBase$path'));
+    request.headers['Authorization']='Bearer $token';
+    request.files.add(http.MultipartFile.fromBytes('file',file.bytes!,filename:file.name));
+    final streamed=await request.send().timeout(const Duration(seconds:30));
+    final response=await http.Response.fromStream(streamed);
+    final decoded=response.body.isEmpty?<String,dynamic>{}:jsonDecode(response.body) as Map<String,dynamic>;
+    if(response.statusCode<200||response.statusCode>=300)throw Exception(decoded['error']??'Upload failed');
     return decoded;
   }
   static Map<String,String> _headers() => {'Content-Type':'application/json', if (token != null) 'Authorization':'Bearer $token'};
@@ -49,13 +63,13 @@ class ApiClient {
 class Shell extends StatefulWidget { const Shell({super.key}); @override State<Shell> createState()=>_ShellState(); }
 class _ShellState extends State<Shell> {
   int index=0; String name='Learner'; bool signedIn=false;
-  final pages = const [DashboardPage(), SubjectsPage(), PracticePage(), JournalPage(), ProfilePage()];
+  final pages = const [DashboardPage(), SubjectsPage(), PracticePage(), JournalPage(), ProfilePage(), DocumentsPage()];
   @override void initState(){ super.initState(); _restore(); }
   Future<void> _restore() async { final p=await SharedPreferences.getInstance(); ApiClient.token=p.getString('token'); if(mounted)setState((){name=p.getString('name')??'Learner'; signedIn=ApiClient.token!=null;}); }
   @override Widget build(BuildContext context)=>Scaffold(
-    appBar: AppBar(title: Row(children:[Container(width:36,height:36,decoration:BoxDecoration(color:ink,borderRadius:BorderRadius.circular(11)),child:const Center(child:Text('G',style:TextStyle(color:gold,fontWeight:FontWeight.w900,fontSize:22)))),const SizedBox(width:10),const Text('GetLearny',style:TextStyle(fontWeight:FontWeight.w800,letterSpacing:-.5)),const Spacer(),IconButton(onPressed:()=>setState(()=>index=4),icon:const Icon(Icons.account_circle_outlined))])),
+    appBar: AppBar(title: Row(children:[Container(width:36,height:36,decoration:BoxDecoration(color:ink,borderRadius:BorderRadius.circular(11)),child:const Center(child:Text('G',style:TextStyle(color:gold,fontWeight:FontWeight.w900,fontSize:22)))),const SizedBox(width:10),const Text('GetLearny',style:TextStyle(fontWeight:FontWeight.w800,letterSpacing:-.5)),const Spacer(),IconButton(tooltip:darkModeNotifier.value?'Switch to light mode':'Switch to dark mode',onPressed:()async{darkModeNotifier.value=!darkModeNotifier.value;final p=await SharedPreferences.getInstance();await p.setBool('dark_mode',darkModeNotifier.value);},icon:Icon(darkModeNotifier.value?Icons.light_mode_outlined:Icons.dark_mode_outlined)),IconButton(onPressed:()=>setState(()=>index=4),icon:const Icon(Icons.account_circle_outlined))])),
     body: SafeArea(child:IndexedStack(index:index,children: pages.map((p)=>p is DashboardPage ? DashboardPage(name:name) : p).toList())),
-    bottomNavigationBar: NavigationBar(selectedIndex:index,onDestinationSelected:(i)=>setState(()=>index=i),destinations:const [NavigationDestination(icon:Icon(Icons.grid_view_rounded),label:'Home'),NavigationDestination(icon:Icon(Icons.menu_book_rounded),label:'Subjects'),NavigationDestination(icon:Icon(Icons.quiz_outlined),label:'Practice'),NavigationDestination(icon:Icon(Icons.edit_note_rounded),label:'Journal'),NavigationDestination(icon:Icon(Icons.person_outline),label:'Profile')]),
+    bottomNavigationBar: NavigationBar(selectedIndex:index,onDestinationSelected:(i)=>setState(()=>index=i),destinations:const [NavigationDestination(icon:Icon(Icons.grid_view_rounded),label:'Home'),NavigationDestination(icon:Icon(Icons.menu_book_rounded),label:'Subjects'),NavigationDestination(icon:Icon(Icons.quiz_outlined),label:'Practice'),NavigationDestination(icon:Icon(Icons.edit_note_rounded),label:'Journal'),NavigationDestination(icon:Icon(Icons.person_outline),label:'Profile'),NavigationDestination(icon:Icon(Icons.folder_open_outlined),label:'Files')]),
   );
 }
 
@@ -158,8 +172,35 @@ Future<void> save()async{
 class JournalField extends StatelessWidget{final String label,hint;final TextEditingController controller;const JournalField({super.key,required this.label,required this.hint,required this.controller});@override Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(label,style:const TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:7),TextField(controller:controller,minLines:2,maxLines:4,decoration:InputDecoration(hintText:hint))]);}
 
 class ProfilePage extends StatefulWidget{const ProfilePage({super.key});@override State<ProfilePage> createState()=>_ProfilePageState();}
-class _ProfilePageState extends State<ProfilePage>{final email=TextEditingController();final password=TextEditingController();final name=TextEditingController();bool register=false,busy=false;@override void dispose(){email.dispose();password.dispose();name.dispose();super.dispose();}Future<void> submit()async{if(apiBase.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Connect an API URL to create an account.')));return;}setState(()=>busy=true);try{final r=await ApiClient.request(register?'/auth/register':'/auth/login',method:'POST',body:{'email':email.text.trim(),'password':password.text,if(register)'name':name.text.trim()});ApiClient.token=r['token'];final p=await SharedPreferences.getInstance();await p.setString('token',r['token']);await p.setString('name',r['user']['name']??'Learner');if(mounted)setState(()=>register=false);if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Signed in successfully.')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>busy=false);}}
-@override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(20),children:[const SectionTitle('Your profile'),const SizedBox(height:8),Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:ink,borderRadius:BorderRadius.circular(22)),child:const Row(children:[CircleAvatar(radius:28,backgroundColor:gold,child:Icon(Icons.school_rounded,color:ink,size:30)),SizedBox(width:14),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('GetLearny learner',style:TextStyle(color:Colors.white,fontSize:18,fontWeight:FontWeight.w800)),SizedBox(height:4),Text('Your WASSCE preparation space',style:TextStyle(color:Colors.white70))]))])),const SizedBox(height:20),Text(register?'Create your account':'Sign in to sync your progress',style:const TextStyle(fontSize:19,fontWeight:FontWeight.w900)),const SizedBox(height:12),if(register)...[TextField(controller:name,decoration:const InputDecoration(labelText:'Full name')),const SizedBox(height:10)],TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'Email')),const SizedBox(height:10),TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'Password (8+ characters)')),const SizedBox(height:12),FilledButton(onPressed:busy?null:submit,child:Text(busy?'Please wait…':register?'Create account':'Sign in')),TextButton(onPressed:()=>setState(()=>register=!register),child:Text(register?'Already have an account? Sign in':'New here? Create an account')),const SizedBox(height:12),const Text('Online learning service',style:TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:6),Text('API endpoint: $apiBase',style:const TextStyle(color:Colors.blueGrey))]);}
+class _ProfilePageState extends State<ProfilePage>{
+ final email=TextEditingController(),password=TextEditingController(),name=TextEditingController();
+ bool register=false,busy=false;String? avatarData,displayName;
+ @override void dispose(){email.dispose();password.dispose();name.dispose();super.dispose();}
+ Future<void> submit()async{if(apiBase.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Connect an API URL to create an account.')));return;}setState(()=>busy=true);try{final r=await ApiClient.request(register?'/auth/register':'/auth/login',method:'POST',body:{'email':email.text.trim(),'password':password.text,if(register)'name':name.text.trim()});ApiClient.token=r['token'];final p=await SharedPreferences.getInstance();await p.setString('token',r['token']);await p.setString('name',r['user']['name']??'Learner');avatarData=r['user']['avatar_data']?.toString();displayName=r['user']['name']?.toString();if(avatarData!=null)await p.setString('avatar_data',avatarData!);if(mounted)setState(()=>register=false);if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Signed in successfully.')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>busy=false);}}
+ Future<void> pickAvatar()async{if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in before uploading a profile picture.')));return;}try{final result=await FilePicker.platform.pickFiles(type:FileType.image,withData:true);if(result==null)return;final file=result.files.single;if(file.bytes==null)throw Exception('Could not read this image');if(file.size>2*1024*1024)throw Exception('Choose an image smaller than 2 MB');setState(()=>busy=true);final r=await ApiClient.upload('/profile/avatar',file);avatarData=r['user']['avatar_data']?.toString();final p=await SharedPreferences.getInstance();if(avatarData!=null)await p.setString('avatar_data',avatarData!);if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Profile picture updated.')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>busy=false);}}
+ @override Widget build(BuildContext context){return ListView(padding:const EdgeInsets.all(20),children:[
+ const SectionTitle('Your profile'),const SizedBox(height:8),
+ Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(gradient:const LinearGradient(colors:[ink,Color(0xFF267452)]),borderRadius:BorderRadius.circular(22)),child:Row(children:[CircleAvatar(radius:32,backgroundColor:gold,foregroundImage:avatarData!=null&&avatarData!.contains(',')?MemoryImage(base64Decode(avatarData!.split(',').last)):null,child:avatarData==null?const Icon(Icons.school_rounded,color:ink,size:30):null),const SizedBox(width:14),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(displayName??'GetLearny learner',style:const TextStyle(color:Colors.white,fontSize:18,fontWeight:FontWeight.w800)),const SizedBox(height:4),const Text('Your WASSCE preparation space',style:TextStyle(color:Colors.white70))])),IconButton(onPressed:busy?null:pickAvatar,tooltip:'Upload profile picture',icon:const Icon(Icons.add_a_photo_outlined,color:Colors.white))])),
+ const SizedBox(height:20),Text(register?'Create your account':'Sign in to sync your progress',style:const TextStyle(fontSize:19,fontWeight:FontWeight.w900)),const SizedBox(height:12),
+ if(register)...[TextField(controller:name,decoration:const InputDecoration(labelText:'Full name')),const SizedBox(height:10)],
+ TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'Email')),const SizedBox(height:10),
+ TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'Password (8+ characters)')),const SizedBox(height:12),
+ FilledButton(onPressed:busy?null:submit,child:Text(busy?'Please wait…':register?'Create account':'Sign in')),
+ TextButton(onPressed:()=>setState(()=>register=!register),child:Text(register?'Already have an account? Sign in':'New here? Create an account')),
+ const SizedBox(height:18),const Text('Appearance',style:TextStyle(fontWeight:FontWeight.w800)),SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Dark mode'),subtitle:const Text('Use a darker theme in low-light settings'),value:darkModeNotifier.value,onChanged:(value)async{darkModeNotifier.value=value;final p=await SharedPreferences.getInstance();await p.setBool('dark_mode',value);setState((){});}),
+ const SizedBox(height:12),const Text('Online learning service',style:TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:6),Text('API endpoint: $apiBase',style:const TextStyle(color:Colors.blueGrey))
+ ]);}
+}
+
+class DocumentsPage extends StatefulWidget{const DocumentsPage({super.key});@override State<DocumentsPage> createState()=>_DocumentsPageState();}
+class _DocumentsPageState extends State<DocumentsPage>{
+ bool loading=false,uploading=false;String error='';List<Map<String,dynamic>> documents=[];
+ @override void initState(){super.initState();load();}
+ Future<void> load()async{if(ApiClient.token==null){setState(()=>error='Sign in from Profile to save and access your study files.');return;}setState(()=>loading=true);try{final r=await ApiClient.request('/documents');if(mounted)setState(()=>documents=(r['documents'] as List? ?? []).map((e)=>Map<String,dynamic>.from(e as Map)).toList());}catch(e){if(mounted)setState(()=>error=e.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>loading=false);}}
+ Future<void> uploadFile()async{if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in before uploading files.')));return;}try{final result=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['pdf','txt'],withData:true);if(result==null)return;final file=result.files.single;if(file.bytes==null)throw Exception('Could not read the selected file');if(file.size>12*1024*1024)throw Exception('Choose a file smaller than 12 MB');setState(()=>uploading=true);final r=await ApiClient.upload('/documents',file);if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(r['message']?.toString()??'Study material saved')));await load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>uploading=false);}}
+ Future<void> download(Map<String,dynamic> d)async{try{final response=await http.get(Uri.parse('$apiBase/documents/${d['id']}'),headers:ApiClient.token==null?{}:{'Authorization':'Bearer ${ApiClient.token}'}).timeout(const Duration(seconds:25));if(response.statusCode<200||response.statusCode>=300)throw Exception('Could not retrieve this file');final path=await FilePicker.platform.saveFile(fileName:d['original_name']?.toString()??'study-material');if(path==null)return;await File(path).writeAsBytes(response.bodyBytes);if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('File saved to your device.')));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}}
+ @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(20),children:[const SectionTitle('Study materials'),const SizedBox(height:6),const Text('Upload PDFs and text notes, then access them from your account.'),const SizedBox(height:16),Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.picture_as_pdf_outlined,size:34,color:blue),const SizedBox(height:8),const Text('Your study library',style:TextStyle(fontWeight:FontWeight.w900,fontSize:18)),const SizedBox(height:6),const Text('PDF or TXT · up to 12 MB per file'),const SizedBox(height:12),FilledButton.icon(onPressed:uploading?null:uploadFile,icon:const Icon(Icons.upload_file),label:Text(uploading?'Uploading…':'Choose and upload file'))]))),const SizedBox(height:20),Row(children:[const Expanded(child:SectionTitle('Your files')),IconButton(onPressed:loading?null:load,icon:const Icon(Icons.refresh))]),if(loading)const Center(child:Padding(padding:EdgeInsets.all(20),child:CircularProgressIndicator())),if(error.isNotEmpty)Padding(padding:const EdgeInsets.symmetric(vertical:8),child:Text(error,style:const TextStyle(color:Colors.deepOrange))),if(!loading&&documents.isEmpty&&error.isEmpty)const Text('Your uploaded study materials will appear here.'),...documents.map((d)=>Card(child:ListTile(leading:CircleAvatar(backgroundColor:mint,foregroundColor:ink,child:Icon(d['mime_type']=='application/pdf'?Icons.picture_as_pdf:Icons.description_outlined)),title:Text(d['original_name']?.toString()??'Study material',maxLines:2,overflow:TextOverflow.ellipsis),subtitle:Text('${((d['size_bytes'] as num? ?? 0)/1024).round()} KB · ${d['processing_status']??'saved'}'),trailing:IconButton(onPressed:()=>download(d),icon:const Icon(Icons.download_outlined)),onTap:()=>download(d))))]);
+}
 
 class SectionTitle extends StatelessWidget{final String text;const SectionTitle(this.text,{super.key});@override Widget build(BuildContext context)=>Text(text,style:const TextStyle(fontSize:20,fontWeight:FontWeight.w900,color:ink,letterSpacing:-.4));}
 class StatCard extends StatelessWidget{final IconData icon;final String label,value;final Color tint;const StatCard({super.key,required this.icon,required this.label,required this.value,required this.tint});@override Widget build(BuildContext context)=>Container(padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(18)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Container(padding:const EdgeInsets.all(7),decoration:BoxDecoration(color:tint,borderRadius:BorderRadius.circular(10)),child:Icon(icon,size:18,color:ink)),const SizedBox(height:12),Text(value,style:const TextStyle(fontSize:17,fontWeight:FontWeight.w900,color:ink)),const SizedBox(height:3),Text(label,style:const TextStyle(fontSize:10,color:Colors.blueGrey))]));}
