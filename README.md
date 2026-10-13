@@ -31,11 +31,11 @@ Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and optio
 5. Run the database migrations once against Neon from a trusted terminal after setting `DATABASE_URL`: `npm run db:migrate`. Do not run migrations as part of every Vercel build. The migration workflow can also run after migration files are merged, provided the GitHub Actions `DATABASE_URL` secret is configured.
 6. Redeploy after setting environment variables. Check `https://YOUR-VERCEL-DOMAIN/api/v1/health` and confirm the database reports connected.
 
-**Important:** Vercel's local filesystem is ephemeral. Current document uploads use temporary storage there, so uploaded files will not be durable across invocations. Configure private object storage before relying on document uploads in production.
+**File storage note:** uploaded PDF/TXT bytes are currently stored in PostgreSQL, so they survive Vercel invocations. For larger production usage, move file contents to private object storage and keep only metadata in PostgreSQL to avoid database bloat.
 
 ## Device notifications
 
-The website uses a service worker and the browser Notification API for device-level alerts. Signed-in users can save Web Push subscriptions so notifications can be delivered when the site is closed, once VAPID keys are configured in the deployment. The Android app uses native local notifications and supports a daily reminder that can fire when the app is closed. Browser notification permission is required; delivery depends on the operating system and browser settings.
+The website uses a service worker and the browser Notification API for device-level alerts. Signed-in users can save Web Push subscriptions and receive a test push when the VAPID keys are configured. A scheduled GitHub Actions workflow checks due reminders every five minutes, so browser push reminders can arrive while the site is closed. Configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` in Vercel; set the same long random `CRON_SECRET` in Vercel and GitHub repository Actions secrets. Configure the repository variable `GETLEARNY_API_URL` if the API is not at `https://getlearny.vercel.app/api/v1`. Apply database migrations first. The Android app uses native notifications and a scheduled daily reminder that can fire while the app is closed. Browser/Android notification permission and operating-system settings still apply.
 
 ## Preview the web app
 From the repository root, run:
