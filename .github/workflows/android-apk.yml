@@ -141,6 +141,29 @@ jobs:
         working-directory: app
         run: flutter pub get
 
+
+      - name: Align Android plugin compile SDK versions
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root = Path.home() / '.pub-cache' / 'hosted' / 'pub.dev'
+          changed = []
+          for path in root.glob('*/android/build.gradle*'):
+              try:
+                  text = path.read_text()
+              except (OSError, UnicodeDecodeError):
+                  continue
+              updated, count = re.subn(r'(?m)^(\\s*)(compileSdkVersion|compileSdk)\\s*(?:=\\s*)?(?:flutter\\.compileSdkVersion|[0-9]+)', r'\\g<1>compileSdkVersion 36', text)
+              if count and updated != text:
+                  path.write_text(updated)
+                  changed.append(str(path))
+          print('Raised compile SDK to 36 in', len(changed), 'cached Android plugin Gradle file(s)')
+          for path in changed:
+              print(' -', path)
+          PY
+
       - name: Analyze Flutter source
         working-directory: app
         run: flutter analyze --no-pub --no-fatal-infos
