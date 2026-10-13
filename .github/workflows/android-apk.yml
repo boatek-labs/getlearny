@@ -74,6 +74,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           groovy = Path('app/android/app/build.gradle')
           kotlin = Path('app/android/app/build.gradle.kts')
           path = kotlin if kotlin.exists() else groovy
@@ -82,15 +83,29 @@ jobs:
           text = path.read_text()
           if path.suffix == '.kts':
               if 'isCoreLibraryDesugaringEnabled = true' not in text:
-                  text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
-              if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:' not in text:
-                  text = text.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', 1)
+                  text, count = re.subn(r'(compileOptions\\s*\\{)', r'\\1\\n        isCoreLibraryDesugaringEnabled = true', text, count=1)
+                  if count == 0:
+                      raise SystemExit('Could not find compileOptions block in Kotlin Gradle file')
+              if not any('coreLibraryDesugaring(' in line for line in text.splitlines()):
+                  text, count = re.subn(r'(dependencies\\s*\\{)', r'\\1\\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', text, count=1)
+                  if count == 0:
+                      text += '\\ndependencies { coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4") }\\n'
+              if not any('coreLibraryDesugaring(' in line for line in text.splitlines()):
+                  raise SystemExit('Core library desugaring dependency was not added')
           else:
               if 'coreLibraryDesugaringEnabled true' not in text:
-                  text = text.replace('compileOptions {', 'compileOptions {\n        coreLibraryDesugaringEnabled true', 1)
-              if 'coreLibraryDesugaring ' not in text:
-                  text = text.replace('dependencies {', "dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'", 1)
+                  text, count = re.subn(r'(compileOptions\\s*\\{)', r'\\1\\n        coreLibraryDesugaringEnabled true', text, count=1)
+                  if count == 0:
+                      raise SystemExit('Could not find compileOptions block in Groovy Gradle file')
+              if not any(line.strip().startswith('coreLibraryDesugaring ') for line in text.splitlines()):
+                  text, count = re.subn(r'(dependencies\\s*\\{)', r"\\1\\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'", text, count=1)
+                  if count == 0:
+                      text += "\\ndependencies { coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4' }\\n"
+              if not any(line.strip().startswith('coreLibraryDesugaring ') for line in text.splitlines()):
+                  raise SystemExit('Core library desugaring dependency was not added')
           path.write_text(text)
+          print('Configured core library desugaring in', path)
+          print('Dependency configured:', any('coreLibraryDesugaring' in line and 'desugar_jdk_libs' in line for line in text.splitlines()))
           PY
 
       - name: Resolve packages
