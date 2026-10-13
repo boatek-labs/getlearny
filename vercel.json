@@ -4,6 +4,10 @@
   "installCommand": "npm install --no-audit --no-fund",
   "buildCommand": "npm run build",
   "outputDirectory": "web",
+  "headers": [
+    { "source": "/app.js", "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }] },
+    { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }] }
+  ],
   "rewrites": [
     { "source": "/api/v1/:path*", "destination": "/api/[...path]" }
   ],
