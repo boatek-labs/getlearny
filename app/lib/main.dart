@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -123,8 +124,40 @@ class _DashboardPageState extends State<DashboardPage> {
   ]);
 }
 
-class SubjectsPage extends StatelessWidget { const SubjectsPage({super.key}); final items=const [['Mathematics','Algebra • Number • Geometry'],['English Language','Comprehension • Summary • Essay'],['Integrated Science','Biology • Chemistry • Physics'],['Social Studies','Governance • Environment • Economy'],['Elective Mathematics','Functions • Calculus • Vectors'],['ICT','Networks • Data • Computing']];
- @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(20),children:[const SectionTitle('Your subjects'),const SizedBox(height:6),const Text('Strengthen prerequisites, then practise WASSCE-style questions.'),const SizedBox(height:16),...items.map((e)=>Card(child:ListTile(contentPadding:const EdgeInsets.all(14),leading:Container(width:48,height:48,decoration:BoxDecoration(color:const Color(0xFFEFEDFF),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.menu_book_rounded,color:blue)),title:Text(e[0],style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text(e[1]),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>TopicListPage(subject:e[0]))))))]); }
+class OfflineLessonStore {
+ static const key='getlearny_offline_lessons_v1';
+ static Future<List<Map<String,dynamic>>> all()async{
+  final p=await SharedPreferences.getInstance();final raw=p.getString(key);if(raw==null)return [];
+  try{final rows=(jsonDecode(raw) as List).map((e)=>Map<String,dynamic>.from(e as Map)).toList();final now=DateTime.now().millisecondsSinceEpoch;final valid=rows.where((e)=>(e['expiresAt'] as num? ?? 0)>now).toList();if(valid.length!=rows.length)await p.setString(key,jsonEncode(valid));return valid;}catch(_){return [];}
+ }
+ static Future<void> save({required String subject,required String topic,required String content})async{
+  final rows=await all();_lastRows=rows;rows.removeWhere((e)=>e['subject']==subject&&e['topic']==topic);final now=DateTime.now();
+  rows.insert(0,{'subject':subject,'topic':topic,'content':content,'savedAt':now.toIso8601String(),'expiresAt':now.add(const Duration(days:7)).millisecondsSinceEpoch});
+  final p=await SharedPreferences.getInstance();_lastRows=rows.take(100).toList();await p.setString(key,jsonEncode(_lastRows));
+ }
+ static Map<String,dynamic>? find({required String subject,required String topic}){for(final e in _lastRows){if(e['subject']==subject&&e['topic']==topic)return e;}return null;}
+ static List<Map<String,dynamic>> _lastRows=[];
+ static List<Map<String,dynamic>> cachedForSubject(String subject)=>_lastRows.where((e)=>e['subject']==subject).toList();
+ static Future<void> refresh()async{_lastRows=await all();}
+}
+class OfflineLessonsPage extends StatefulWidget {final String? subject;const OfflineLessonsPage({super.key,this.subject});@override State<OfflineLessonsPage> createState()=>_OfflineLessonsPageState();}
+class _OfflineLessonsPageState extends State<OfflineLessonsPage>{bool loading=true;List<Map<String,dynamic>> lessons=[];@override void initState(){super.initState();_load();}Future<void> _load()async{await OfflineLessonStore.refresh();if(mounted)setState(()=>{lessons=OfflineLessonStore._lastRows.where((e)=>widget.subject==null||e['subject']==widget.subject).toList(),loading=false});}
+ @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Offline lessons')),body:ListView(padding:const EdgeInsets.all(20),children:[const Text('Downloaded lessons stay on this device for 7 days. Download while connected; opening saved lessons does not need the internet.'),const SizedBox(height:16),if(loading)const Center(child:CircularProgressIndicator()),if(!loading&&lessons.isEmpty)const Text('No downloaded lessons yet. Open a subject while online and choose “Download next 3 lessons”.'),...lessons.map((item)=>Card(child:ListTile(leading:const Icon(Icons.offline_pin_outlined,color:blue),title:Text(item['topic']?.toString()??''),subtitle:Text('${item['subject']} · saved ${item['savedAt']?.toString().substring(0,10)??''}'),onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>OfflineLessonReader(item:item)))))]));
+}
+class OfflineLessonReader extends StatelessWidget {final Map<String,dynamic> item;const OfflineLessonReader({super.key,required this.item});@override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(item['subject']?.toString()??'Offline lesson')),body:ListView(padding:const EdgeInsets.all(20),children:[Text(item['topic']?.toString()??'',style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),Card(child:Padding(padding:const EdgeInsets.all(18),child:MarkdownBody(data:item['content']?.toString()??'')))]));}
+
+class SubjectsPage extends StatelessWidget {
+ const SubjectsPage({super.key});
+ static const items=[['Mathematics','MATH'],['English Language','ENG'],['Integrated Science','SCI'],['Social Studies','SOC'],['Elective Mathematics','EMATH'],['ICT','ICT']];
+ @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(20),children:[
+  const SectionTitle('Your subjects'),const SizedBox(height:6),
+  const Text('Subjects open a live catalogue from GetLearny. Topics and lessons are not fabricated when the service is unavailable.'),
+  const SizedBox(height:16),
+  FilledButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const OfflineLessonsPage())),icon:const Icon(Icons.offline_pin_outlined),label:const Text('My downloaded lessons')),
+  const SizedBox(height:12),
+  ...items.map((e)=>Card(child:ListTile(contentPadding:const EdgeInsets.all(14),leading:Container(width:48,height:48,decoration:BoxDecoration(color:const Color(0xFFEFEDFF),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.menu_book_rounded,color:blue)),title:Text(e[0],style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:const Text('Open live topics and lessons'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>TopicListPage(subject:e[0]))))))
+ ]);
+}
 
 class TopicListPage extends StatefulWidget {
  final String subject;
@@ -132,48 +165,83 @@ class TopicListPage extends StatefulWidget {
  @override State<TopicListPage> createState()=>_TopicListPageState();
 }
 class _TopicListPageState extends State<TopicListPage>{
- bool loading=false; String error=''; List<Map<String,dynamic>> topics=[];
- String get code=>({'Mathematics':'MATH','English Language':'ENG','Integrated Science':'SCI','Social Studies':'SOC','Elective Mathematics':'EMATH','ICT':'ICT'}[widget.subject]??'MATH');
+ bool loading=false,downloading=false; String error=''; List<Map<String,dynamic>> topics=[];
+ String get code=>({'Mathematics':'MATH','Core Mathematics':'MATH','English':'ENG','English Language':'ENG','Chemistry':'SCI','Biology':'SCI','Integrated Science':'SCI','Social Studies':'SOC','Add Math':'EMATH','Additional Mathematics':'EMATH','Elective Mathematics':'EMATH','Computer Science':'ICT','ICT':'ICT'}[widget.subject]??widget.subject.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9_-]'),''));
  @override void initState(){super.initState();_loadTopics();}
  Future<void> _loadTopics()async{
-  setState(() { loading=true; error=''; });
-  try{
-   final result=await ApiClient.request('/topics?subject=$code&limit=100');
-   final rows=(result['topics'] as List? ?? []);
-   if(!mounted)return;
-   setState(()=>topics=rows.map((e)=>Map<String,dynamic>.from(e as Map)).toList());
-  }catch(e){if(mounted)setState(()=>error='Could not load the live topic catalogue. Check your connection and retry.');}
+  setState((){loading=true;error='';});
+  try{final result=await ApiClient.request('/topics?subject=$code&limit=100');final rows=(result['topics'] as List? ?? []);if(!mounted)return;setState(()=>topics=rows.map((e)=>Map<String,dynamic>.from(e as Map)).toList());}
+  catch(e){if(mounted)setState(()=>error='Live topic catalogue unavailable. Downloaded lessons remain available offline.');}
   finally{if(mounted)setState(()=>loading=false);}
  }
- @override Widget build(BuildContext context)=>Scaffold(
-  appBar:AppBar(title:Text(widget.subject)),
-  body:ListView(padding:const EdgeInsets.all(20),children:[
-   Text('Study path',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.w900)),
-   const SizedBox(height:8),
-   const Text('Live topics from the GetLearny catalogue. Choose a topic to open its lesson.'),
-   const SizedBox(height:18),
-   if(loading)const Center(child:Padding(padding:EdgeInsets.all(28),child:CircularProgressIndicator())),
-   if(error.isNotEmpty)...[Text(error,style:const TextStyle(color:Colors.deepOrange)),TextButton.icon(onPressed:_loadTopics,icon:const Icon(Icons.refresh),label:const Text('Retry'))],
-   if(!loading&&error.isEmpty&&topics.isEmpty)const Text('No topics are published for this subject yet.'),
-   ...topics.map((topic)=>Card(child:ListTile(
-    leading:CircleAvatar(backgroundColor:gold,foregroundColor:ink,child:const Icon(Icons.menu_book_outlined)),
-    title:Text(topic['title']?.toString()??'Topic',style:const TextStyle(fontWeight:FontWeight.w700)),
-    subtitle:Text(topic['description']?.toString()??'Select to study this topic'),
-    trailing:const Icon(Icons.arrow_forward_ios,size:15),
-    onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>LessonPage(subject:widget.subject,topic:topic['title']?.toString()??'Topic'))),
-   )))
-  ])
- );
+ Future<void> _downloadThree()async{
+  if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in before downloading lessons.')));return;}
+  if(topics.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No live topics are available to download yet. Connect and retry.')));return;}
+  setState(()=>downloading=true);int saved=0;
+  try{
+   for(final row in topics.take(3)){
+    final topic=row['title']?.toString()??'';if(topic.isEmpty)continue;
+    final result=await ApiClient.request('/lessons/generate',method:'POST',body:{'subject':widget.subject,'topic':topic,'level':'Not specified','exam':'WASSCE'});
+    final lesson=result['lesson']?.toString()??'';if(lesson.trim().isEmpty)continue;
+    await OfflineLessonStore.save(subject:widget.subject,topic:topic,content:lesson);saved++;
+   }
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(saved==0?'No lessons were returned by the service.':'Saved $saved real lesson(s) for offline reading for 7 days.')));
+  }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Download stopped: ${e.toString().replaceFirst('Exception: ','')}')));}
+  finally{if(mounted)setState(()=>downloading=false);}
+ }
+ @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(widget.subject)),body:ListView(padding:const EdgeInsets.all(20),children:[
+  Text('Study path',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.w900)),const SizedBox(height:8),
+  const Text('Topics are loaded from the live GetLearny catalogue.'),
+  const SizedBox(height:14),
+  FilledButton.icon(onPressed:loading||downloading?null:_downloadThree,icon:downloading?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.download_for_offline_outlined),label:Text(downloading?'Downloading lessons…':'Download next 3 lessons · keep offline 7 days')),
+  const SizedBox(height:12),
+  OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>OfflineLessonsPage(subject:widget.subject))),icon:const Icon(Icons.library_books_outlined),label:const Text('Open saved lessons')),
+  const SizedBox(height:16),
+  if(loading)const Center(child:Padding(padding:EdgeInsets.all(28),child:CircularProgressIndicator())),
+  if(error.isNotEmpty)...[Text(error,style:const TextStyle(color:Colors.deepOrange)),TextButton.icon(onPressed:_loadTopics,icon:const Icon(Icons.refresh),label:const Text('Retry'))],
+  if(!loading&&error.isEmpty&&topics.isEmpty)const Text('No topics are published for this subject yet.'),
+  ...topics.map((topic)=>Card(child:ListTile(leading:CircleAvatar(backgroundColor:gold,foregroundColor:ink,child:const Icon(Icons.menu_book_outlined)),title:Text(topic['title']?.toString()??'Topic',style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text(topic['description']?.toString()??''),trailing:const Icon(Icons.arrow_forward_ios,size:15),onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>LessonPage(subject:widget.subject,topic:topic['title']?.toString()??''))))),
+  if(error.isNotEmpty) ...OfflineLessonStore.cachedForSubject(widget.subject).map((item)=>Card(child:ListTile(leading:const Icon(Icons.offline_pin_outlined),title:Text(item['topic']??''),subtitle:const Text('Saved lesson · available offline'),onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>OfflineLessonReader(item:item))))))
+ ]));
 }
 
 class LessonPage extends StatefulWidget {final String subject,topic;const LessonPage({super.key,required this.subject,required this.topic});@override State<LessonPage> createState()=>_LessonPageState();}
-class _LessonPageState extends State<LessonPage>{bool busy=false;String? lesson;String error='';@override void initState(){super.initState();_generate();}Future<void> _generate()async{if(apiBase.isEmpty){setState(()=>error='The learning service URL is not configured.');return;}setState(()=>busy=true);try{final r=await ApiClient.request('/lessons/generate',method:'POST',body:{'subject':widget.subject,'topic':widget.topic,'level':'SHS 3','exam':'WASSCE'});setState(()=>lesson=r['lesson'] as String? ?? 'Lesson unavailable');}catch(e){setState(()=>error='Could not reach the online learning service. Check your connection and sign in, then retry.');lesson=null;}finally{if(mounted)setState(()=>busy=false);}}
-@override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(widget.subject)),body:ListView(padding:const EdgeInsets.all(20),children:[Text(widget.topic,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:ink)),const SizedBox(height:8),const Text('LEARN • UNDERSTAND • APPLY',style:TextStyle(color:blue,fontSize:11,letterSpacing:1.3,fontWeight:FontWeight.w800)),if(error.isNotEmpty)...[Padding(padding:const EdgeInsets.only(top:12),child:Text(error,style:const TextStyle(color:Colors.deepOrange))),TextButton.icon(onPressed:_generate,icon:const Icon(Icons.refresh),label:const Text('Retry connection'))],const SizedBox(height:16),if(busy)const Center(child:CircularProgressIndicator())else if(lesson!=null)Card(child:Padding(padding:const EdgeInsets.all(18),child:MarkdownBody(data:lesson!))),const SizedBox(height:18),FilledButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const PracticePage())),icon:const Icon(Icons.quiz_outlined),label:const Text('Try practice questions'))]));}
+class _LessonPageState extends State<LessonPage>{bool busy=false;String? lesson;String error='';@override void initState(){super.initState();_generate();}Future<void> _generate()async{
+ final cached=OfflineLessonStore.find(subject:widget.subject,topic:widget.topic);
+ if(!mounted)return;
+ if(!await _hasNetworkHint()){if(cached!=null){setState(()=>lesson=cached['content'] as String?);return;}setState(()=>error='You are offline and this lesson has not been downloaded on this device yet.');return;}
+ if(ApiClient.token==null){if(cached!=null){setState(()=>lesson=cached['content'] as String?);return;}setState(()=>error='Sign in to generate and save lessons.');return;}
+ setState(()=>busy=true);try{final r=await ApiClient.request('/lessons/generate',method:'POST',body:{'subject':widget.subject,'topic':widget.topic,'level':'Not specified','exam':'WASSCE'});final text=r['lesson'] as String?;if(text==null||text.trim().isEmpty)throw Exception('The lesson service returned no lesson.');await OfflineLessonStore.save(subject:widget.subject,topic:widget.topic,content:text);if(mounted)setState(()=>lesson=text);}catch(e){if(mounted){if(cached!=null)setState(()=>lesson=cached['content'] as String?);else setState(()=>error=e.toString().replaceFirst('Exception: ',''));}}finally{if(mounted)setState(()=>busy=false);}}
+ Future<bool> _hasNetworkHint()async{try{final uri=Uri.parse(apiBase);return uri.hasScheme&&uri.host.isNotEmpty;}catch(_){return false;}}
+ @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(widget.subject)),body:ListView(padding:const EdgeInsets.all(20),children:[Text(widget.topic,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900)),const SizedBox(height:8),const Text('LEARN • UNDERSTAND • APPLY',style:TextStyle(color:blue,fontSize:11,letterSpacing:1.3,fontWeight:FontWeight.w800)),if(error.isNotEmpty)...[Padding(padding:const EdgeInsets.only(top:12),child:Text(error,style:const TextStyle(color:Colors.deepOrange))),TextButton.icon(onPressed:_generate,icon:const Icon(Icons.refresh),label:const Text('Retry'))],const SizedBox(height:16),if(busy)const Center(child:CircularProgressIndicator())else if(lesson!=null)Card(child:Padding(padding:const EdgeInsets.all(18),child:MarkdownBody(data:lesson!))),const SizedBox(height:18),FilledButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const PracticePage())),icon:const Icon(Icons.quiz_outlined),label:const Text('Try AI practice questions'))]));
+}
 
 class PracticePage extends StatefulWidget {const PracticePage({super.key});@override State<PracticePage> createState()=>_PracticePageState();}
-class _PracticePageState extends State<PracticePage>{int q=0;int? selected;int score=0;bool finished=false;final questions=const [QuizQ('Which operation undoes addition?', ['Multiplication','Subtraction','Division','Squaring'],1,'Subtract the same amount from both sides to keep an equation balanced.'),QuizQ('What is 3 × (4 + 2)?',['18','14','20','10'],0,'Evaluate the brackets first: 4 + 2 = 6, then 3 × 6 = 18.'),QuizQ('Which is a renewable energy source?',['Coal','Diesel','Solar','Natural gas'],2,'Solar energy is replenished naturally by sunlight.')];
-@override Widget build(BuildContext context){final item=questions[q.clamp(0,questions.length-1)];return Scaffold(appBar:AppBar(title:const Text('Quick practice')),body:ListView(padding:const EdgeInsets.all(20),children:[Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:ink,borderRadius:BorderRadius.circular(20)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(finished?'PRACTICE COMPLETE':'QUESTION ${q+1} OF ${questions.length}',style:const TextStyle(color:gold,fontWeight:FontWeight.w800,letterSpacing:1.3,fontSize:11)),const SizedBox(height:12),Text(finished?'You scored $score/${questions.length}':'Choose the best answer.',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w800,fontSize:23))])),const SizedBox(height:20),if(!finished)...[Text(item.question,style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900,color:ink)),const SizedBox(height:16),...item.options.asMap().entries.map((e)=>Padding(padding:const EdgeInsets.only(bottom:10),child:Card(child:RadioListTile<int>(value:e.key,groupValue:selected,onChanged:(v)=>setState(()=>selected=v),title:Text(e.value),activeColor:blue)))),if(selected!=null)Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:const Color(0xFFEFEDFF),borderRadius:BorderRadius.circular(16)),child:Text(item.explanation,style:const TextStyle(height:1.4))),const SizedBox(height:10),FilledButton(onPressed:selected==null?null:(){setState((){if(selected==item.answer)score++;if(q<questions.length-1){q++;selected=null;}else{finished=true;}});},child:Text(q==questions.length-1?'Finish practice':'Check & continue'))]else... [Text(score>=2?'Nice work — keep building consistency.':'Good effort. Review the explanations and try again.'),const SizedBox(height:18),FilledButton(onPressed:()=>setState((){q=0;score=0;selected=null;finished=false;}),child:const Text('Try again'))]]));}}
-class QuizQ{final String question;final List<String> options;final int answer;final String explanation;const QuizQ(this.question,this.options,this.answer,this.explanation);}
+class _PracticePageState extends State<PracticePage>{
+ final topicController=TextEditingController();String subject='Mathematics';int count=10;bool loading=false,grading=false,finished=false;int secondsLeft=0,score=0;Timer? timer;String feedback='';List<Map<String,dynamic>> questions=[];List<int?> answers=[];
+ static const subjects=['Mathematics','English Language','Integrated Science','Chemistry','Biology','Social Studies','Elective Mathematics','ICT'];
+ @override void dispose(){timer?.cancel();topicController.dispose();super.dispose();}
+ Future<void> generate()async{
+  if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in from Profile to generate AI practice.')));return;}
+  setState(()=>loading=true);try{final r=await ApiClient.request('/practice/generate',method:'POST',body:{'subject':subject,'topic':topicController.text.trim(),'level':'Not specified','count':count});final rows=(r['questions'] as List? ?? []);if(rows.length<count)throw Exception('The AI service returned fewer questions than requested. Please retry.');questions=rows.map((e)=>Map<String,dynamic>.from(e as Map)).toList();answers=List<int?>.filled(questions.length,null);score=0;feedback='';finished=false;secondsLeft=questions.length*60;startTimer();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}finally{if(mounted)setState(()=>loading=false);}
+ }
+ void startTimer(){timer?.cancel();timer=Timer.periodic(const Duration(seconds:1),(t){if(!mounted)return;if(secondsLeft<=1){setState(()=>secondsLeft=0);t.cancel();grade(expired:true);}else setState(()=>secondsLeft--);});}
+ Future<void> grade({bool expired=false})async{
+  if(finished||questions.isEmpty)return;timer?.cancel();setState(()=>grading=true);
+  try{final r=await ApiClient.request('/practice/grade',method:'POST',body:{'subject':subject,'questions':questions.map((q)=>{'question':q['question'],'options':q['options'],'answer':q['answer'],'explanation':q['explanation']??''}).toList(),'answers':answers});score=(r['score'] as num? ?? 0).toInt();feedback=r['feedback']?.toString()??'';try{await ApiClient.request('/tests',method:'POST',body:{'subject':subject,'title':'Timed AI practice','score':score,'max_score':questions.length});}catch(_){}}
+  catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not grade this attempt: ${e.toString().replaceFirst('Exception: ','')}')));return;}
+  finally{if(mounted)setState(()=>grading=false);}
+  if(mounted)setState(()=>finished=true);
+ }
+ @override Widget build(BuildContext context){
+  if(questions.isEmpty)return Scaffold(appBar:AppBar(title:const Text('AI practice')),body:ListView(padding:const EdgeInsets.all(20),children:[const SectionTitle('Build a timed practice set'),const SizedBox(height:8),const Text('Questions are generated by the live AI service. No sample questions are substituted.'),const SizedBox(height:18),DropdownButtonFormField<String>(value:subject,decoration:const InputDecoration(labelText:'Subject'),items:subjects.map((s)=>DropdownMenuItem(value:s,child:Text(s))).toList(),onChanged:(v){if(v!=null)setState(()=>subject=v);}),const SizedBox(height:12),TextField(controller:topicController,decoration:const InputDecoration(labelText:'Topic (optional)',hintText:'Enter a topic from your class notes')),const SizedBox(height:12),DropdownButtonFormField<int>(value:count,decoration:const InputDecoration(labelText:'Questions · one minute each'),items:const [5,10,15].map((n)=>DropdownMenuItem(value:n,child:Text('$n questions · $n minutes'))).toList(),onChanged:(v){if(v!=null)setState(()=>count=v);}),const SizedBox(height:18),FilledButton.icon(onPressed:loading?null:generate,icon:loading?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.auto_awesome),label:Text(loading?'Generating from AI…':'Generate timed exam'))]));
+  if(finished)return Scaffold(appBar:AppBar(title:const Text('Practice result')),body:ListView(padding:const EdgeInsets.all(20),children:[const SectionTitle('Answers locked and graded'),Text('$score / ${questions.length}',style:const TextStyle(fontSize:32,fontWeight:FontWeight.w900)),if(feedback.isNotEmpty)Card(child:Padding(padding:const EdgeInsets.all(16),child:MarkdownBody(data:feedback))),FilledButton(onPressed:(){setState((){questions=[];answers=[];finished=false;feedback='';});},child:const Text('Create another practice set'))]));
+  final q=questions[answers.length>0?answers.indexWhere((a)=>a==null)<0?questions.length-1:answers.indexWhere((a)=>a==null):0];
+  final index=answers.indexWhere((a)=>a==null)<0?questions.length-1:answers.indexWhere((a)=>a==null);
+  final options=(q['options'] as List? ?? []).map((e)=>e.toString()).toList();
+  return Scaffold(appBar:AppBar(title:Text(subject),actions:[Padding(padding:const EdgeInsets.all(16),child:Center(child:Text('${secondsLeft~/60}:${(secondsLeft%60).toString().padLeft(2,'0')}',style:TextStyle(fontWeight:FontWeight.w900,color:secondsLeft<=60?Colors.red:blue))))]),body:ListView(padding:const EdgeInsets.all(20),children:[Text('QUESTION ${index+1} OF ${questions.length}',style:const TextStyle(color:blue,fontWeight:FontWeight.w800,letterSpacing:1.2)),const SizedBox(height:12),Text(q['question']?.toString()??'',style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),const SizedBox(height:18),...options.asMap().entries.map((e)=>Card(child:RadioListTile<int>(value:e.key,groupValue:answers[index],onChanged:grading?null:(v)=>setState(()=>answers[index]=v),title:Text(e.value)))),const SizedBox(height:18),FilledButton(onPressed:grading?null:()=>index==questions.length-1?grade():setState(()=>answers[index]=answers[index]??-1),child:Text(grading?'Grading…':index==questions.length-1?'Submit and grade':'Save answer & continue'))]));
+ }
+}
 
 class JournalPage extends StatefulWidget{const JournalPage({super.key});@override State<JournalPage> createState()=>_JournalPageState();}
 class _JournalPageState extends State<JournalPage>{final learned=TextEditingController();final difficult=TextEditingController();final next=TextEditingController();final entries=<Map<String,String>>[];@override void dispose(){learned.dispose();difficult.dispose();next.dispose();super.dispose();}@override void initState(){super.initState();_loadEntries();}
