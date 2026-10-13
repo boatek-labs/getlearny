@@ -59,7 +59,7 @@ The workflow generates Android platform scaffolding before building. For a local
 - Registration/login with hashed passwords and expiring JWTs
 - User-scoped learning logs, test results, and journal entries
 - PostgreSQL migration runner with migration history
-- PDF/plain-text upload intake (OCR/background extraction is not implemented yet)
+- PDF/plain-text upload with selectable-text extraction and document AI tutoring (scanned-PDF OCR still needs an OCR provider)
 - Responsive browser app and Flutter client using the hosted API by default
 
 ## Production checklist
