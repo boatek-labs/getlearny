@@ -1,0 +1,18 @@
+{
+  "name": "GetLearny — Learn with purpose",
+  "short_name": "GetLearny",
+  "description": "A focused learning companion for Ghanaian SHS students.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#11152B",
+  "theme_color": "#11152B",
+  "icons": [
+    {
+      "src": "/assets/getlearny-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
