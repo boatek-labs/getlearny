@@ -180,18 +180,37 @@ jobs:
         working-directory: app
         run: flutter test --no-pub
 
-      - name: Build debug APK
+      - name: Build APK
         working-directory: app
         env:
           GETLEARNY_API_URL: ${{ vars.GETLEARNY_API_URL }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           GETLEARNY_API_URL="${GETLEARNY_API_URL:-https://getlearny.vercel.app/api/v1}"
-          flutter build apk --debug --dart-define=GETLEARNY_API_URL="$GETLEARNY_API_URL"
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/getlearny-release.jks
+            flutter build apk --release --dart-define=GETLEARNY_API_URL="$GETLEARNY_API_URL"
+            APK="$(find build/app/outputs/flutter-apk -maxdepth 1 -name '*.apk' ! -name '*unsigned*' | head -n 1)"
+            if [ -z "$APK" ]; then APK="$(find build/app/outputs/flutter-apk -maxdepth 1 -name '*.apk' | head -n 1)"; fi
+            test -n "$APK"
+            zipalign -f -p 4 "$APK" build/app/outputs/flutter-apk/getlearny-aligned.apk
+            apksigner sign --ks android/app/getlearny-release.jks --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD --ks-key-alias "$ANDROID_KEY_ALIAS" --out build/app/outputs/flutter-apk/getlearny.apk build/app/outputs/flutter-apk/getlearny-aligned.apk
+            apksigner verify build/app/outputs/flutter-apk/getlearny.apk
+            rm -f android/app/getlearny-release.jks build/app/outputs/flutter-apk/getlearny-aligned.apk
+            echo "Built APK with the persistent release signing key."
+          else
+            flutter build apk --debug --dart-define=GETLEARNY_API_URL="$GETLEARNY_API_URL"
+            cp build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/getlearny.apk
+            echo "::warning::Built a debug-signed APK. Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD as GitHub Actions secrets for consistent signatures across updates."
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: getlearny-android-apk
-          path: app/build/app/outputs/flutter-apk/app-debug.apk
+          path: app/build/app/outputs/flutter-apk/getlearny.apk
           if-no-files-found: error
           retention-days: 30
