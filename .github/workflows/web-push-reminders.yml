@@ -24,8 +24,8 @@ jobs:
         run: |
           API_URL="${GETLEARNY_API_URL:-https://getlearny.vercel.app/api/v1}"
           if [ -z "$CRON_SECRET" ]; then
-            echo "Missing repository secret CRON_SECRET; configure it before enabling scheduled push reminders."
-            exit 1
+            echo "CRON_SECRET is not configured yet; skipping scheduled push reminders."
+            exit 0
           fi
           curl --fail-with-body --silent --show-error -X POST "$API_URL/notifications/dispatch-reminders" \
             -H "Authorization: Bearer $CRON_SECRET" \
