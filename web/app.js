@@ -34,6 +34,7 @@ function renderRecords(){const journal=$('#journal-list');journal.innerHTML=stat
 $('#test-list').innerHTML=state.tests.length?state.tests.map(t=>`<article class="record"><div class="record-top"><span>${esc(new Date(t.taken_at||t.date||Date.now()).toLocaleDateString())}</span><span>${Number(t.score/t.max_score*100).toFixed(0)}%</span></div><b>${esc(t.title)} · ${esc(t.subject)}</b><p>Score: ${esc(t.score)} / ${esc(t.max_score)}</p></article>`).join(''):'<div class="record"><p>No tests recorded yet. Add your next class test or practice result above.</p></div>'}
 function localRead(key){try{return JSON.parse(localStorage.getItem(key)||'[]')}catch{return []}}function localWrite(key,v){localStorage.setItem(key,JSON.stringify(v))}
 async function loadDashboard(){
+  if(state.token&&state.api){try{const me=await api('/me');state.user=me.user;localStorage.setItem('gl_user',JSON.stringify(state.user))}catch{}}
   renderSubjects();renderSidebarAccount();renderDocumentSubjectOptions();
   state.journal=[];state.tests=[];state.logs=[];
   const localJournal=localRead('gl_journal'),localTests=localRead('gl_tests'),localLogs=localRead('gl_logs');
