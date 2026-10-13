@@ -80,3 +80,6 @@ html[data-theme="dark"] .breadcrumb,html[data-theme="dark"] .section-heading p,h
 html[data-theme="dark"] .hero{background:radial-gradient(circle at 82% 18%,rgba(155,231,255,.13),transparent 27%),linear-gradient(125deg,#17172F,#292452 75%,#37316B)}
 html[data-theme="dark"] .profile-photo-preview{border-color:#17182C}
 @media(max-width:650px){.notification-card{grid-template-columns:auto 1fr}.notification-card button{grid-column:1/-1}.document-record{align-items:flex-start;flex-wrap:wrap}}
+
+.document-ask{flex-basis:100%;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}.document-ask summary{cursor:pointer;color:#7057F5;font-weight:800;padding:6px 0}.document-ask-form{display:grid;gap:10px;padding-top:10px}.document-ask-form textarea{min-height:78px;resize:vertical}.document-ask-form .button{justify-self:start}.ai-answer{margin-top:8px;white-space:normal;line-height:1.65;color:var(--ink);background:var(--blue-soft);padding:12px;border-radius:12px;overflow-wrap:anywhere}
+html[data-theme="dark"] .ai-answer{background:#252144;color:#F0F0FA}
