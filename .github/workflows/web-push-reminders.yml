@@ -1,0 +1,33 @@
+name: GetLearny Web Push Reminders
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: getlearny-web-push-reminders
+  cancel-in-progress: false
+
+jobs:
+  dispatch-reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch due device notifications
+        env:
+          GETLEARNY_API_URL: ${{ vars.GETLEARNY_API_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          API_URL="${GETLEARNY_API_URL:-https://getlearny.vercel.app/api/v1}"
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Missing repository secret CRON_SECRET; configure it before enabling scheduled push reminders."
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error -X POST "$API_URL/notifications/dispatch-reminders" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{}'
