@@ -20,7 +20,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and optionally `OPENROUTER_API_KEY` in `api/.env`. Never commit secrets. Without an OpenRouter key, lesson generation uses a built-in fallback lesson. Copy the root `.env.example` or `api/.env.example` and replace placeholders locally.
+Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and optionally `OPENROUTER_API_KEY` in `api/.env`. For background browser push, also configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT`; generate the key pair with `npx web-push generate-vapid-keys` and never commit the private key. Without an OpenRouter key, lesson generation uses a built-in fallback lesson. Copy the root `.env.example` or `api/.env.example` and replace placeholders locally.
 
 ## Deploy to Vercel + Neon PostgreSQL
 
@@ -28,10 +28,14 @@ Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and optio
 2. Vercel uses `vercel.json`: it serves the `web/` directory and routes `/api/*` to the Express serverless handler in `api/[...path].js`.
 3. In **Vercel → Project → Settings → Environment Variables**, add `DATABASE_URL` using your Neon pooled connection string, `JWT_SECRET` as a newly generated random secret of at least 32 characters, and `APP_URL` as the production HTTPS URL. Add `OPENROUTER_API_KEY` for AI lesson generation, `OPENROUTER_MODEL=openrouter/free`, and optional `OPENROUTER_FALLBACK_MODELS` as a comma-separated list of free model IDs. Never commit actual secrets.
 4. Add `CORS_ORIGINS` only when using a separate frontend domain; for a same-origin deployment the app works at `/api/v1` by default. Include the production URL if you set a restrictive allow-list.
-5. Run the database migrations once against Neon from a trusted terminal after setting `DATABASE_URL`: `npm run db:migrate`. Do not run migrations as part of every Vercel build.
+5. Run the database migrations once against Neon from a trusted terminal after setting `DATABASE_URL`: `npm run db:migrate`. Do not run migrations as part of every Vercel build. The migration workflow can also run after migration files are merged, provided the GitHub Actions `DATABASE_URL` secret is configured.
 6. Redeploy after setting environment variables. Check `https://YOUR-VERCEL-DOMAIN/api/v1/health` and confirm the database reports connected.
 
-**Important:** Vercel's local filesystem is ephemeral. Current document uploads use temporary storage there, so uploaded files will not be durable across invocations. Configure private object storage before relying on document uploads in production.
+**File storage note:** uploaded PDF/TXT bytes are currently stored in PostgreSQL, so they survive Vercel invocations. For larger production usage, move file contents to private object storage and keep only metadata in PostgreSQL to avoid database bloat.
+
+## Device notifications
+
+The website uses a service worker and the browser Notification API for device-level alerts. Signed-in users can save Web Push subscriptions and receive a test push when the VAPID keys are configured. A scheduled GitHub Actions workflow checks due reminders every five minutes, so browser push reminders can arrive while the site is closed. Configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` in Vercel; set the same long random `CRON_SECRET` in Vercel and GitHub repository Actions secrets. Configure the repository variable `GETLEARNY_API_URL` if the API is not at `https://getlearny.vercel.app/api/v1`. Apply database migrations first. The Android app uses native notifications and a scheduled daily reminder that can fire while the app is closed. Browser/Android notification permission and operating-system settings still apply.
 
 ## Preview the web app
 From the repository root, run:
@@ -55,7 +59,7 @@ The workflow generates Android platform scaffolding before building. For a local
 - Registration/login with hashed passwords and expiring JWTs
 - User-scoped learning logs, test results, and journal entries
 - PostgreSQL migration runner with migration history
-- PDF/plain-text upload intake (OCR/background extraction is not implemented yet)
+- PDF/plain-text upload with selectable-text extraction and document AI tutoring (scanned-PDF OCR still needs an OCR provider)
 - Responsive browser app and Flutter client using the hosted API by default
 
 ## Production checklist

@@ -10,6 +10,8 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import webPush from 'web-push';
+import pdfParse from 'pdf-parse';
 import { query, health } from './db.js';
 
 const app=express();
@@ -27,10 +29,46 @@ app.use('/api/v1',rateLimit({windowMs:60*1000,limit:120,standardHeaders:true,leg
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
 const fail=(res,status,error)=>res.status(status).json({error});
 const envReady=()=>Boolean(process.env.JWT_SECRET&&process.env.JWT_SECRET.length>=32);
+const pushReady=()=>Boolean(process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT);
+function configurePush(){if(pushReady())webPush.setVapidDetails(process.env.VAPID_SUBJECT,process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY)}
+configurePush();
 function auth(req,res,next){const value=req.headers.authorization||'';const token=value.startsWith('Bearer ')?value.slice(7):'';if(!token||!envReady())return fail(res,401,'Sign in required');try{req.user=jwt.verify(token,process.env.JWT_SECRET,{issuer:'getlearny-api',audience:'getlearny-app'});next()}catch{return fail(res,401,'Session expired. Sign in again.')}}
 const registration=z.object({name:z.string().trim().min(2).max(120),email:z.string().trim().email().max(254),password:z.string().min(8).max(128)});
 const login=z.object({email:z.string().trim().email().max(254),password:z.string().min(8).max(128)});
 const journalSchema=z.object({learned:z.string().trim().min(1).max(5000),difficult:z.string().max(5000).optional().default(''),next_step:z.string().max(2000).optional().default('')});
+
+app.get('/api/v1/notifications/public-key',(_req,res)=>res.json({configured:pushReady(),publicKey:pushReady()?process.env.VAPID_PUBLIC_KEY:null}));
+app.post('/api/v1/notifications/subscriptions',auth,asyncRoute(async(req,res)=>{
+ if(!pushReady())return fail(res,503,'Background push notifications are not configured yet');
+ const schema=z.object({subscription:z.object({endpoint:z.string().url().max(2048),keys:z.object({p256dh:z.string().min(8),auth:z.string().min(8)})}),timezone:z.string().max(100).optional().default('Africa/Accra'),reminderTime:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional().default('19:00'),dailyReminder:z.boolean().optional().default(true)});
+ const parsed=schema.safeParse(req.body);if(!parsed.success)return fail(res,400,'Invalid notification subscription');
+ const {subscription,timezone,reminderTime,dailyReminder}=parsed.data;
+ await query('INSERT INTO notification_subscriptions(user_id,endpoint,subscription,timezone,reminder_time,daily_reminder_enabled,updated_at) VALUES($1,$2,$3::jsonb,$4,$5::time,$6,now()) ON CONFLICT(endpoint) DO UPDATE SET user_id=EXCLUDED.user_id,subscription=EXCLUDED.subscription,timezone=EXCLUDED.timezone,reminder_time=EXCLUDED.reminder_time,daily_reminder_enabled=EXCLUDED.daily_reminder_enabled,updated_at=now()',[req.user.sub,subscription.endpoint,JSON.stringify(subscription),timezone,reminderTime,dailyReminder]);
+ res.status(201).json({saved:true,backgroundPush:true});
+}));
+app.delete('/api/v1/notifications/subscriptions',auth,asyncRoute(async(req,res)=>{
+ const endpoint=String(req.body?.endpoint||'');if(!endpoint)return fail(res,400,'Subscription endpoint is required');
+ await query('DELETE FROM notification_subscriptions WHERE user_id=$1 AND endpoint=$2',[req.user.sub,endpoint]);res.json({removed:true});
+}));
+
+app.post('/api/v1/notifications/dispatch-reminders',asyncRoute(async(req,res)=>{
+ if(!process.env.CRON_SECRET||req.headers.authorization!==`Bearer ${process.env.CRON_SECRET}`)return fail(res,401,'Scheduled notification authorization failed');
+ if(!pushReady())return res.json({skipped:true,reason:'Background push notifications are not configured'});
+ const due=await query("UPDATE notification_subscriptions SET last_reminder_date=(now() AT TIME ZONE timezone)::date,updated_at=now() WHERE daily_reminder_enabled=true AND last_reminder_date IS DISTINCT FROM (now() AT TIME ZONE timezone)::date AND EXTRACT(HOUR FROM now() AT TIME ZONE timezone)=EXTRACT(HOUR FROM reminder_time) AND floor(EXTRACT(MINUTE FROM now() AT TIME ZONE timezone)/5)=floor(EXTRACT(MINUTE FROM reminder_time)/5) RETURNING id,subscription");
+ let sent=0,expired=0,failed=0;
+ for(const row of due.rows){try{await webPush.sendNotification(row.subscription,JSON.stringify({title:'Time for a GetLearny study session',body:'Take one small step toward your WASSCE goals.',url:'/',tag:'getlearny-daily-reminder'}));sent++;}catch(error){failed++;if(error.statusCode===404||error.statusCode===410){await query('DELETE FROM notification_subscriptions WHERE id=$1',[row.id]);expired++;}}}
+ res.json({matched:due.rowCount,sent,failed,expired});
+}));
+
+app.post('/api/v1/notifications/test',auth,asyncRoute(async(req,res)=>{
+ if(!pushReady())return fail(res,503,'Background push notifications need VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT configuration');
+ const r=await query('SELECT id,subscription FROM notification_subscriptions WHERE user_id=$1',[req.user.sub]);if(!r.rowCount)return fail(res,404,'No push subscription is saved for this account on this device');
+ const payload=JSON.stringify({title:'GetLearny test notification',body:'Your device can receive GetLearny notifications.',url:'/',tag:'getlearny-push-test'});
+ const results=await Promise.allSettled(r.rows.map(async row=>{try{await webPush.sendNotification(row.subscription,payload)}catch(error){if(error.statusCode===404||error.statusCode===410)await query('DELETE FROM notification_subscriptions WHERE id=$1',[row.id]);throw error}}));
+ const sent=results.filter(x=>x.status==='fulfilled').length;if(!sent)return fail(res,502,'Push delivery failed. Check the VAPID configuration and browser subscription.');
+ res.json({sent,message:'Test push notification sent.'});
+}));
+
 app.get('/api/v1/health',asyncRoute(async(_req,res)=>{const db=await health();res.status(db.configured&&!db.connected?503:200).json({status:db.connected?'ok':db.configured?'degraded':'unconfigured',service:'getlearny-api',database:db,now:new Date().toISOString()})}));
 app.post('/api/v1/auth/register',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=registration.safeParse(req.body);if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);const {name,email,password}=parsed.data;const hash=await bcrypt.hash(password,12);try{const r=await query('INSERT INTO users(name,email,password_hash) VALUES($1,$2,$3) RETURNING id,name,email,role,avatar_data,created_at',[name,email.toLowerCase(),hash]);const user=r.rows[0];const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.status(201).json({token,user})}catch(e){if(e.code==='23505')return fail(res,409,'An account with this email already exists');throw e}}));
 app.post('/api/v1/auth/login',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=login.safeParse(req.body);if(!parsed.success)return fail(res,400,'Enter a valid email and password');const r=await query('SELECT id,name,email,role,avatar_data,password_hash,created_at FROM users WHERE email=$1',[parsed.data.email.toLowerCase()]);const user=r.rows[0];if(!user||!await bcrypt.compare(parsed.data.password,user.password_hash))return fail(res,401,'Email or password is incorrect');delete user.password_hash;const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.json({token,user})}));
@@ -111,7 +149,26 @@ Close your notes and explain the main idea in three sentences. Then attempt prac
 }));
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||12)*1024*1024,files:1},fileFilter:(_req,file,cb)=>{const allowed=['application/pdf','text/plain'];if(!allowed.includes(file.mimetype))return cb(new Error('Only PDF and plain-text files are accepted'));cb(null,true)}});const avatarUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:2*1024*1024,files:1},fileFilter:(_req,file,cb)=>{if(!['image/jpeg','image/png','image/webp'].includes(file.mimetype))return cb(new Error('Profile pictures must be JPG, PNG or WebP'));cb(null,true)}});
 app.post('/api/v1/profile/avatar',auth,avatarUpload.single('file'),asyncRoute(async(req,res)=>{if(!req.file)return fail(res,400,'Choose a JPG, PNG or WebP profile picture');const avatar_data='data:'+req.file.mimetype+';base64,'+req.file.buffer.toString('base64');const r=await query('UPDATE users SET avatar_data=$1,updated_at=now() WHERE id=$2 RETURNING id,name,email,role,avatar_data,created_at',[avatar_data,req.user.sub]);res.json({user:r.rows[0],message:'Profile picture updated'})}));
-app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res)=>{if(!req.file)return fail(res,400,'Select a PDF or text file');const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,processing_status) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,original_name,mime_type,size_bytes,processing_status,created_at',[req.user.sub,path.basename(req.file.originalname).slice(0,255),'database',req.file.mimetype,req.file.size,req.file.buffer,'uploaded']);res.status(201).json({document:r.rows[0],message:'Study material saved to your account.'})}));
+app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res)=>{
+ if(!req.file)return fail(res,400,'Select a PDF or text file');
+ let extractedText='',processingStatus='uploaded';
+ if(req.file.mimetype==='text/plain'){extractedText=req.file.buffer.toString('utf8').slice(0,150000);processingStatus=extractedText.trim()?'ready':'uploaded';}
+ else{try{const parsed=await pdfParse(req.file.buffer);extractedText=String(parsed.text||'').slice(0,150000);processingStatus=extractedText.trim()?'ready':'needs_ocr';}catch{processingStatus='needs_ocr';}}
+ const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,extracted_text,processing_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,original_name,mime_type,size_bytes,processing_status,created_at',[req.user.sub,path.basename(req.file.originalname).slice(0,255),'database',req.file.mimetype,req.file.size,req.file.buffer,extractedText,processingStatus]);
+ res.status(201).json({document:r.rows[0],message:processingStatus==='needs_ocr'?'File saved. It looks like a scanned or image-only PDF; OCR is required to read its pages.':'Study material saved and text extracted.'});
+}));
+app.post('/api/v1/documents/:id/ask',auth,asyncRoute(async(req,res)=>{
+ const parsed=z.object({question:z.string().trim().min(3).max(1000)}).safeParse(req.body);
+ if(!parsed.success)return fail(res,400,'Enter a question of 3 to 1000 characters');
+ const result=await query('SELECT original_name,extracted_text,processing_status FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);
+ if(!result.rowCount)return fail(res,404,'Study material not found');
+ const doc=result.rows[0];if(!doc.extracted_text?.trim())return fail(res,422,doc.processing_status==='needs_ocr'?'This PDF appears to be scanned or image-only. OCR must be configured before the tutor can read it.':'No readable text was extracted from this file.');
+ if(!process.env.OPENROUTER_API_KEY)return fail(res,503,'Document AI tutoring needs OPENROUTER_API_KEY configured in the deployment.');
+ const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,3);
+ for(const model of models){try{const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENROUTER_API_KEY}`,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':process.env.OPENROUTER_APP_NAME||'GetLearny'},body:JSON.stringify({model,messages:[{role:'system',content:'You are a supportive Ghana SHS tutor. Answer the student using the supplied study document as the primary source. Explain concepts clearly, use age-appropriate language, show a short example when useful, and say when the document does not contain enough information. Do not invent quotations or pretend unsupported facts came from the file.'},{role:'user',content:`Study file: ${doc.original_name}\n\nDOCUMENT EXCERPT:\n${doc.extracted_text.slice(0,30000)}\n\nSTUDENT QUESTION:\n${parsed.data.question}`}],temperature:0.3,max_tokens:1000}),signal:AbortSignal.timeout(10000)});if(!response.ok)continue;const data=await response.json();const answer=data.choices?.[0]?.message?.content;if(typeof answer==='string'&&answer.trim())return res.json({answer:answer.trim(),source:doc.original_name,generatedBy:'openrouter'});}catch{/* try the next configured model */}}
+ return fail(res,502,'The document tutor could not reach an available AI model. Please try again.');
+}));
+
 app.get('/api/v1/documents',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,original_name,mime_type,size_bytes,processing_status,created_at FROM uploaded_documents WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[req.user.sub]);res.json({documents:r.rows})}));
 app.get('/api/v1/documents/:id',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT original_name,mime_type,content FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);if(!r.rowCount)return fail(res,404,'Document not found');res.setHeader('Content-Type',r.rows[0].mime_type);res.setHeader('Content-Disposition','attachment; filename="study-material"');res.send(r.rows[0].content)}));
 app.use((err,_req,res,_next)=>{if(err instanceof multer.MulterError)return fail(res,err.code==='LIMIT_FILE_SIZE'?413:400,err.code==='LIMIT_FILE_SIZE'?'File is too large':'Upload failed');if(err.message==='Origin not allowed by CORS')return fail(res,403,err.message);console.error(err);return fail(res,500,process.env.NODE_ENV==='production'?'Unexpected server error':err.message||'Unexpected server error')});

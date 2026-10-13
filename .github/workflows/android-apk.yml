@@ -45,6 +45,54 @@ jobs:
           flutter create --platforms=android --org com.boateklabs --project-name getlearny /tmp/getlearny-android-scaffold
           cp -R /tmp/getlearny-android-scaffold/android app/android
 
+      - name: Configure Android notification permissions and reboot receiver
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/android/app/src/main/AndroidManifest.xml')
+          text = path.read_text()
+          permission = '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
+          boot_permission = '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'
+          if 'android.permission.POST_NOTIFICATIONS' not in text:
+              text = text.replace('<application', permission + '\n' + boot_permission + '\n    <application', 1)
+          receivers = '''
+                  <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+                  <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                          <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                          <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                          <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                      </intent-filter>
+                  </receiver>'''
+          if 'ScheduledNotificationBootReceiver' not in text:
+              text = text.replace('</application>', receivers + '\n    </application>', 1)
+          path.write_text(text)
+          PY
+
+      - name: Enable Android notification scheduling support
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          groovy = Path('app/android/app/build.gradle')
+          kotlin = Path('app/android/app/build.gradle.kts')
+          path = kotlin if kotlin.exists() else groovy
+          if not path.exists():
+              raise SystemExit('Generated Android app Gradle file was not found')
+          text = path.read_text()
+          if path.suffix == '.kts':
+              if 'isCoreLibraryDesugaringEnabled = true' not in text:
+                  text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+              if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:' not in text:
+                  text = text.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', 1)
+          else:
+              if 'coreLibraryDesugaringEnabled true' not in text:
+                  text = text.replace('compileOptions {', 'compileOptions {\n        coreLibraryDesugaringEnabled true', 1)
+              if 'coreLibraryDesugaring ' not in text:
+                  text = text.replace('dependencies {', "dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'", 1)
+          path.write_text(text)
+          PY
+
       - name: Resolve packages
         working-directory: app
         run: flutter pub get
