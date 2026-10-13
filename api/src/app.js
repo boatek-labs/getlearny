@@ -13,6 +13,9 @@ import jwt from 'jsonwebtoken';
 import { query, health } from './db.js';
 
 const app=express();
+// Vercel sits in front of this serverless function and forwards the client IP.
+// Trust the single platform proxy so express-rate-limit can safely read req.ip.
+app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(helmet());
 const deploymentOrigins=[process.env.APP_URL,process.env.VERCEL_URL?`https://${process.env.VERCEL_URL}`:'',process.env.VERCEL_PROJECT_PRODUCTION_URL?`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`:''];
