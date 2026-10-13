@@ -154,7 +154,7 @@ app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res
  let extractedText='',processingStatus='uploaded';
  if(req.file.mimetype==='text/plain'){extractedText=req.file.buffer.toString('utf8').slice(0,150000);processingStatus=extractedText.trim()?'ready':'uploaded';}
  else{try{const parsed=await pdfParse(req.file.buffer);extractedText=String(parsed.text||'').slice(0,150000);processingStatus=extractedText.trim()?'ready':'needs_ocr';}catch{processingStatus='needs_ocr';}}
- const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,extracted_text,processing_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,original_name,mime_type,size_bytes,processing_status,created_at',[req.user.sub,path.basename(req.file.originalname).slice(0,255),'database',req.file.mimetype,req.file.size,req.file.buffer,extractedText,processingStatus]);
+ const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,extracted_text,processing_status,subject_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at',[req.user.sub,path.basename(req.file.originalname).slice(0,255),'database',req.file.mimetype,req.file.size,req.file.buffer,extractedText,processingStatus,String(req.body?.subject_name||'General').trim().slice(0,120)||'General']);
  res.status(201).json({document:r.rows[0],message:processingStatus==='needs_ocr'?'File saved. It looks like a scanned or image-only PDF; OCR is required to read its pages.':'Study material saved and text extracted.'});
 }));
 app.post('/api/v1/documents/:id/ask',auth,asyncRoute(async(req,res)=>{
@@ -169,7 +169,7 @@ app.post('/api/v1/documents/:id/ask',auth,asyncRoute(async(req,res)=>{
  return fail(res,502,'The document tutor could not reach an available AI model. Please try again.');
 }));
 
-app.get('/api/v1/documents',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,original_name,mime_type,size_bytes,processing_status,created_at FROM uploaded_documents WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[req.user.sub]);res.json({documents:r.rows})}));
+app.get('/api/v1/documents',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at FROM uploaded_documents WHERE user_id=$1 ORDER BY subject_name,created_at DESC LIMIT 100',[req.user.sub]);res.json({documents:r.rows})}));
 app.get('/api/v1/documents/:id',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT original_name,mime_type,content FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);if(!r.rowCount)return fail(res,404,'Document not found');res.setHeader('Content-Type',r.rows[0].mime_type);res.setHeader('Content-Disposition','attachment; filename="study-material"');res.send(r.rows[0].content)}));
 app.use((err,_req,res,_next)=>{if(err instanceof multer.MulterError)return fail(res,err.code==='LIMIT_FILE_SIZE'?413:400,err.code==='LIMIT_FILE_SIZE'?'File is too large':'Upload failed');if(err.message==='Origin not allowed by CORS')return fail(res,403,err.message);console.error(err);return fail(res,500,process.env.NODE_ENV==='production'?'Unexpected server error':err.message||'Unexpected server error')});
 export default app;
