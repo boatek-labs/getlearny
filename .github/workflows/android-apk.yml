@@ -54,7 +54,7 @@ jobs:
           permission = '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
           boot_permission = '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'
           if 'android.permission.POST_NOTIFICATIONS' not in text:
-              text = text.replace('<application', permission + '\\n' + boot_permission + '\\n    <application', 1)
+              text = text.replace('<application', permission + '\n' + boot_permission + '\n    <application', 1)
           receivers = '''
                   <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
                   <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
@@ -66,7 +66,7 @@ jobs:
                       </intent-filter>
                   </receiver>'''
           if 'ScheduledNotificationBootReceiver' not in text:
-              text = text.replace('</application>', receivers + '\\n    </application>', 1)
+              text = text.replace('</application>', receivers + '\n    </application>', 1)
           path.write_text(text)
           PY
 
