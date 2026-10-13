@@ -12,6 +12,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import webPush from 'web-push';
 import pdfParse from 'pdf-parse';
+import { createWorker } from 'tesseract.js';
 import { query, health } from './db.js';
 
 const app=express();
@@ -160,8 +161,9 @@ Close your notes and explain the main idea in three sentences. Then attempt prac
   res.json({lesson,generatedBy,subject,topic});
 }));
 const TEXT_MATERIAL_EXTENSIONS=new Set(['.txt','.md','.markdown','.csv','.json']);
+const OCR_IMAGE_MIMES=new Set(['image/png','image/jpeg','image/webp']);
 const TEXT_MATERIAL_MIMES=new Set(['text/plain','text/markdown','text/csv','application/json','application/octet-stream']);
-const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||12)*1024*1024,files:1},fileFilter:(_req,file,cb)=>{const ext=path.extname(file.originalname||'').toLowerCase();if(file.mimetype==='application/pdf'||(TEXT_MATERIAL_EXTENSIONS.has(ext)&&TEXT_MATERIAL_MIMES.has(file.mimetype)))return cb(null,true);return cb(new Error('Supported study materials: PDF, TXT, Markdown, CSV and JSON files'))}});const avatarUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:2*1024*1024,files:1},fileFilter:(_req,file,cb)=>{if(!['image/jpeg','image/png','image/webp'].includes(file.mimetype))return cb(new Error('Profile pictures must be JPG, PNG or WebP'));cb(null,true)}});
+const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||12)*1024*1024,files:1},fileFilter:(_req,file,cb)=>{const ext=path.extname(file.originalname||'').toLowerCase();if(file.mimetype==='application/pdf'||OCR_IMAGE_MIMES.has(file.mimetype)||(TEXT_MATERIAL_EXTENSIONS.has(ext)&&TEXT_MATERIAL_MIMES.has(file.mimetype)))return cb(null,true);return cb(new Error('Supported study materials: PDF, TXT, Markdown, CSV, JSON, PNG, JPG and WEBP files'))}});const avatarUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:2*1024*1024,files:1},fileFilter:(_req,file,cb)=>{if(!['image/jpeg','image/png','image/webp'].includes(file.mimetype))return cb(new Error('Profile pictures must be JPG, PNG or WebP'));cb(null,true)}});
 app.post('/api/v1/profile/avatar',auth,avatarUpload.single('file'),asyncRoute(async(req,res)=>{if(!req.file)return fail(res,400,'Choose a JPG, PNG or WebP profile picture');const avatar_data='data:'+req.file.mimetype+';base64,'+req.file.buffer.toString('base64');const r=await query('UPDATE users SET avatar_data=$1,updated_at=now() WHERE id=$2 RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at',[avatar_data,req.user.sub]);res.json({user:r.rows[0],message:'Profile picture updated'})}));
 app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res)=>{
  if(!req.file)return fail(res,400,'Select a PDF or text file');
@@ -169,7 +171,7 @@ app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res
  if(req.file.mimetype==='text/plain'){extractedText=req.file.buffer.toString('utf8').slice(0,150000);processingStatus=extractedText.trim()?'ready':'uploaded';}
  else{try{const parsed=await pdfParse(req.file.buffer);extractedText=String(parsed.text||'').slice(0,150000);processingStatus=extractedText.trim()?'ready':'needs_ocr';}catch{processingStatus='needs_ocr';}}
  const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,extracted_text,processing_status,subject_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at',[req.user.sub,path.basename(req.file.originalname).slice(0,255),'database',req.file.mimetype,req.file.size,req.file.buffer,extractedText,processingStatus,String(req.body?.subject_name||'General').trim().slice(0,120)||'General']);
- res.status(201).json({document:r.rows[0],message:processingStatus==='needs_ocr'?'File saved. It looks like a scanned or image-only PDF; OCR is required to read its pages.':'Study material saved and text extracted.'});
+ res.status(201).json({document:r.rows[0],message:processingStatus==='needs_ocr'?'Scanned PDF saved. Upload its pages as images to run OCR.':processingStatus==='ocr_failed'?'Image saved, but OCR could not read it. Try a clearer image.':processingStatus==='ready'?'Study material saved and readable text extracted.':'File saved, but no readable text was found.'});
 }));
 app.post('/api/v1/documents/:id/ask',auth,asyncRoute(async(req,res)=>{
  const parsed=z.object({question:z.string().trim().min(3).max(1000)}).safeParse(req.body);
