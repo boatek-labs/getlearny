@@ -43,7 +43,7 @@ class GetLearnyNotifications {
  bool initialized=false;
  Future<void> initialize() async {
   if(initialized)return;
-  const settings=InitializationSettings(android:AndroidInitializationSettings('@mipmap/ic_launcher'));
+  const settings=InitializationSettings(android:AndroidInitializationSettings('ic_notification'));
   try { await plugin.initialize(settings); } catch (_) { return; }
   tzdata.initializeTimeZones();
   try { final zone=await FlutterTimezone.getLocalTimezone(); tz.setLocalLocation(tz.getLocation(zone)); } catch (_) { tz.setLocalLocation(tz.getLocation('Africa/Accra')); }
@@ -54,7 +54,7 @@ class GetLearnyNotifications {
   final android=plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   return await android?.requestNotificationsPermission() ?? false;
  }
- NotificationDetails get details=>const NotificationDetails(android:AndroidNotificationDetails('getlearny_study','GetLearny study reminders',channelDescription:'Study sessions, progress and learning reminders.',importance:Importance.high,priority:Priority.high,color:Color(0xFF7057F5),icon:'@mipmap/ic_launcher'));
+ NotificationDetails get details=>const NotificationDetails(android:AndroidNotificationDetails('getlearny_study','GetLearny study reminders',channelDescription:'Study sessions, progress and learning reminders.',importance:Importance.high,priority:Priority.high,color:Color(0xFF7057F5),icon:'ic_notification'));
  Future<void> showTest() async {await initialize();await plugin.show(7101,'GetLearny notifications are on','Your device notifications are working. Keep making progress.',details);}
  Future<void> scheduleDaily(TimeOfDay time) async {
   await initialize();
