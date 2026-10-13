@@ -53,6 +53,14 @@ Open `http://localhost:8080/web/`. To enable account sync and generated lessons,
 
 The workflow generates Android platform scaffolding before building. For a local build, install Flutter and run `flutter pub get` then `flutter run` inside `app/`.
 
+### Keep APK updates installable
+
+Android only installs an APK as an in-place update when the package ID and signing certificate match the installed app. The workflow keeps the application ID stable (`com.boateklabs.getlearny`) and increments the app version. To keep signing stable across clean GitHub-hosted runners, configure these repository **Actions secrets** once: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. Generate a release keystore locally with `keytool -genkeypair -v -keystore getlearny-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias getlearny`, then store the one-line Base64 output of that file as `ANDROID_KEYSTORE_BASE64`; keep the `.jks` private and never commit it. Do not replace this key for future releases. Until those secrets are configured, the workflow builds a debug APK and explicitly warns that its signing key is not stable between runners. If an older installation was made from an earlier ephemeral debug APK, the first install signed with a new stable key may require a one-time reinstall; after that transition, keep the same key and use increasing version codes.
+
+### Offline lessons
+
+In the Android app, open a subject while online and choose **Download next 3 lessons**. The app downloads only lessons returned by the live topic and lesson APIs, saves them on-device for seven days, and displays them in **My downloaded lessons** without needing a connection. Downloading requires sign-in and a working lesson service; the app does not manufacture substitute lessons when the service is unavailable.
+
 ## Current functionality
 - SHS/WASSCE-oriented subject paths and practice
 - Optional OpenRouter lesson generation with a built-in fallback
