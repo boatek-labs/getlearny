@@ -120,54 +120,35 @@ app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
   const parsed=lessonInput.safeParse(req.body);
   if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
   const {subject,topic,level,exam}=parsed.data;
-  const fallback=`# ${topic}
 
-**Subject:** ${subject} · **Level:** ${level} · **Exam focus:** ${exam}
-
-## Learning goals
-- Explain the central idea in your own words.
-- Identify prerequisite knowledge.
-- Work through an example and check your answer.
-
-## Build the foundation
-Start by writing down what you already know about ${topic}. Define unfamiliar words, then connect each new idea to an example from class or daily life.
-
-## Worked approach
-1. Read the question carefully and underline the command words.
-2. List the information given and what you must find.
-3. Select the rule, definition, or method that applies.
-4. Show each step and check your result.
-
-## WASSCE exam tip
-Answer the exact question, show clear working where appropriate, and reserve a moment to check units, spelling, and whether every part was answered.
-
-## Quick recall
-Close your notes and explain the main idea in three sentences. Then attempt practice questions and review every mistake.`;
   const key=process.env.OPENROUTER_API_KEY;
   if(!key)return fail(res,503,'AI lessons are not configured. Add OPENROUTER_API_KEY to the API deployment environment.');
-  let lesson=null,generatedBy='openrouter';
-  if(key){
-    const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,3);
-    for(const model of models){
-      try{
-        const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{
-          method:'POST',
-          headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':process.env.OPENROUTER_APP_NAME||'GetLearny'},
-          body:JSON.stringify({model,messages:[
-            {role:'system',content:'You are a careful Ghana SHS tutor preparing students for WASSCE. Teach prerequisite concepts first, use age-appropriate language, worked examples, common mistakes, and a short self-check. Do not fabricate official syllabus claims.'},
-            {role:'user',content:`Create a useful lesson in Markdown. Subject: ${subject}. Topic: ${topic}. Level: ${level}. Exam: ${exam}. Include goals, prerequisite check, explanation, worked example, common mistakes, exam tip, and 3 self-check questions with answers at the end.`}
-          ],temperature:0.4,max_tokens:1800}),
-          signal:AbortSignal.timeout(9000)
-        });
-        if(!response.ok)continue;
-        const data=await response.json();
-        const content=data.choices?.[0]?.message?.content;
-        if(typeof content==='string'&&content.trim()){lesson=content;generatedBy='openrouter';break}
-      }catch{/* try the next configured model; built-in lesson remains available */}
-    }
+  let lesson=null;
+  let lastStatus=0;
+  const configured=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)];
+  const models=[...configured,'google/gemma-4-31b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free','openrouter/free'].filter((x,i,a)=>a.indexOf(x)===i).slice(0,2);
+  for(let index=0;index<models.length;index++){
+    const model=models[index];
+    try{
+      const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+        method:'POST',
+        headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':process.env.OPENROUTER_APP_NAME||'GetLearny'},
+        body:JSON.stringify({model,messages:[
+          {role:'system',content:'You are a careful Ghana SHS tutor preparing students for WASSCE. Teach prerequisite concepts first, use age-appropriate language, worked examples, common mistakes, and a short self-check. Do not fabricate official syllabus claims.'},
+          {role:'user',content:`Create a useful lesson in Markdown. Subject: ${subject}. Topic: ${topic}. Level: ${level}. Exam: ${exam}. Include goals, prerequisite check, explanation, worked example, common mistakes, exam tip, and 3 self-check questions with answers at the end.`}
+        ],temperature:0.4,max_tokens:1500}),
+        signal:AbortSignal.timeout(index===0?14000:9000)
+      });
+      lastStatus=response.status;
+      if(!response.ok){console.warn('OpenRouter lesson model failed:',model,'HTTP',response.status);continue;}
+      const data=await response.json();
+      const generated=data.choices?.[0]?.message?.content;
+      if(typeof generated==='string'&&generated.trim()){lesson=generated;break;}
+      console.warn('OpenRouter lesson model returned empty content:',model);
+    }catch(error){console.warn('OpenRouter lesson request failed:',model,error?.name||'request error');}
   }
-  if(!lesson)return fail(res,502,'OpenRouter could not generate a lesson. Check the API key, model settings, and provider limits, then retry.');
-  res.json({lesson,generatedBy,subject,topic});
+  if(!lesson)return fail(res,502,lastStatus===401?'OpenRouter rejected the API key. Check OPENROUTER_API_KEY in Vercel.':lastStatus===402?'OpenRouter reports a payment or credit limit.':lastStatus===429?'OpenRouter free-model rate limit reached. Try again shortly.':'AI lesson generation timed out or no free model returned a lesson. Check Vercel function logs and OpenRouter model availability, then retry.');
+  res.json({lesson,generatedBy:'openrouter',subject,topic});
 }));
 const TEXT_MATERIAL_EXTENSIONS=new Set(['.txt','.md','.markdown','.csv','.json']);
 const OCR_IMAGE_MIMES=new Set(['image/png','image/jpeg','image/webp']);
