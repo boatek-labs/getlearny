@@ -96,6 +96,15 @@ app.post('/api/v1/tests',auth,asyncRoute(async(req,res)=>{const s=z.object({subj
 app.get('/api/v1/tests',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT * FROM test_logs WHERE user_id=$1 ORDER BY taken_at DESC LIMIT 100',[req.user.sub]);res.json({tests:r.rows})}));
 app.post('/api/v1/journal',auth,asyncRoute(async(req,res)=>{const s=journalSchema.safeParse(req.body);if(!s.success)return fail(res,400,s.error.issues[0].message);const d=s.data;const r=await query('INSERT INTO journal_entries(user_id,learned,difficult,next_step) VALUES($1,$2,$3,$4) RETURNING id,learned,difficult,next_step,created_at',[req.user.sub,d.learned,d.difficult,d.next_step]);res.status(201).json({entry:r.rows[0]})}));
 app.get('/api/v1/journal',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,learned,difficult,next_step,created_at FROM journal_entries WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[req.user.sub]);res.json({entries:r.rows})}));
+app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
+ const parsed=z.object({subject:z.string().trim().min(1).max(100),topic:z.string().trim().max(200).optional().default(''),level:z.string().max(100).optional().default('Not specified'),count:z.number().int().min(5).max(15).default(10)}).safeParse(req.body);
+ if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
+ const {subject,topic,level,count}=parsed.data;const key=process.env.OPENROUTER_API_KEY;
+ if(!key)return fail(res,503,'AI practice is not configured. Add OPENROUTER_API_KEY to the API deployment environment.');
+ const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,4);let lastStatus=0;
+ for(const model of models){try{const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny'},body:JSON.stringify({model,temperature:0.4,max_tokens:3600,response_format:{type:'json_object'},messages:[{role:'system',content:'Create accurate age-appropriate multiple choice practice for a Ghanaian secondary student. Return only JSON object with key questions, an array of exactly requested count. Each item has question string, options array of exactly 4 strings, answer integer 0-3, explanation string, topic string. Exactly one correct answer per question. No markdown.'},{role:'user',content:'Create '+count+' original questions. Subject: '+subject+'; class level: '+level+'; topic: '+(topic||'balanced core concepts')+'. Follow the schema exactly.'}]}),signal:AbortSignal.timeout(25000)});lastStatus=response.status;if(!response.ok)continue;const data=await response.json();let content=data.choices?.[0]?.message?.content;if(typeof content!=='string')continue;content=content.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');const decoded=JSON.parse(content),qs=decoded.questions;if(!Array.isArray(qs)||qs.length!==count)continue;const valid=qs.every(q=>typeof q.question==='string'&&q.question.trim()&&Array.isArray(q.options)&&q.options.length===4&&q.options.every(o=>typeof o==='string'&&o.trim())&&Number.isInteger(q.answer)&&q.answer>=0&&q.answer<4&&typeof q.explanation==='string'&&q.explanation.trim());if(!valid)continue;return res.json({questions:qs,generatedBy:'openrouter',subject,model})}catch{}}
+ return fail(res,502,lastStatus===401?'OpenRouter rejected the API key. Verify the key in the API deployment environment.':lastStatus===402?'OpenRouter reports insufficient credits or a payment limit.':lastStatus===429?'OpenRouter rate limit reached. Try again shortly.':'OpenRouter could not generate a valid practice set. Check the model and API key, then retry.');
+}));
 const lessonInput=z.object({subject:z.string().trim().min(1).max(100),topic:z.string().trim().min(1).max(200),level:z.string().max(30).default('SHS 3'),exam:z.string().max(30).default('WASSCE')});
 app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
   const parsed=lessonInput.safeParse(req.body);
@@ -124,8 +133,9 @@ Answer the exact question, show clear working where appropriate, and reserve a m
 
 ## Quick recall
 Close your notes and explain the main idea in three sentences. Then attempt practice questions and review every mistake.`;
-  let lesson=fallback,generatedBy='built-in';
   const key=process.env.OPENROUTER_API_KEY;
+  if(!key)return fail(res,503,'AI lessons are not configured. Add OPENROUTER_API_KEY to the API deployment environment.');
+  let lesson=null,generatedBy='openrouter';
   if(key){
     const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,3);
     for(const model of models){
@@ -146,6 +156,7 @@ Close your notes and explain the main idea in three sentences. Then attempt prac
       }catch{/* try the next configured model; built-in lesson remains available */}
     }
   }
+  if(!lesson)return fail(res,502,'OpenRouter could not generate a lesson. Check the API key, model settings, and provider limits, then retry.');
   res.json({lesson,generatedBy,subject,topic});
 }));
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||12)*1024*1024,files:1},fileFilter:(_req,file,cb)=>{const allowed=['application/pdf','text/plain'];if(!allowed.includes(file.mimetype))return cb(new Error('Only PDF and plain-text files are accepted'));cb(null,true)}});const avatarUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:2*1024*1024,files:1},fileFilter:(_req,file,cb)=>{if(!['image/jpeg','image/png','image/webp'].includes(file.mimetype))return cb(new Error('Profile pictures must be JPG, PNG or WebP'));cb(null,true)}});
