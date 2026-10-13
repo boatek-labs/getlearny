@@ -46,7 +46,7 @@ class GetLearnyNotifications {
   const settings=InitializationSettings(android:AndroidInitializationSettings('@mipmap/ic_launcher'));
   await plugin.initialize(settings);
   tzdata.initializeTimeZones();
-  try { final zone=await FlutterTimezone.getLocalTimezone(); tz.setLocalLocation(tz.getLocation(zone.identifier)); } catch (_) { tz.setLocalLocation(tz.getLocation('Africa/Accra')); }
+  try { final zone=await FlutterTimezone.getLocalTimezone(); tz.setLocalLocation(tz.getLocation(zone)); } catch (_) { tz.setLocalLocation(tz.getLocation('Africa/Accra')); }
   initialized=true;
  }
  Future<bool> requestPermission() async {
