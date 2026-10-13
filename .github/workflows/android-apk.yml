@@ -45,6 +45,29 @@ jobs:
           flutter create --platforms=android --org com.boateklabs --project-name getlearny /tmp/getlearny-android-scaffold
           cp -R /tmp/getlearny-android-scaffold/android app/android
 
+      - name: Enable Android notification scheduling support
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          groovy = Path('app/android/app/build.gradle')
+          kotlin = Path('app/android/app/build.gradle.kts')
+          path = kotlin if kotlin.exists() else groovy
+          if not path.exists():
+              raise SystemExit('Generated Android app Gradle file was not found')
+          text = path.read_text()
+          if path.suffix == '.kts':
+              if 'isCoreLibraryDesugaringEnabled = true' not in text:
+                  text = text.replace('compileOptions {', 'compileOptions {\\n        isCoreLibraryDesugaringEnabled = true', 1)
+              if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:' not in text:
+                  text = text.replace('dependencies {', 'dependencies {\\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', 1)
+          else:
+              if 'coreLibraryDesugaringEnabled true' not in text:
+                  text = text.replace('compileOptions {', 'compileOptions {\\n        coreLibraryDesugaringEnabled true', 1)
+              if 'coreLibraryDesugaring ' not in text:
+                  text = text.replace('dependencies {', "dependencies {\\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'", 1)
+          path.write_text(text)
+          PY
+
       - name: Resolve packages
         working-directory: app
         run: flutter pub get
