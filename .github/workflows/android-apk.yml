@@ -155,7 +155,10 @@ jobs:
                   text = path.read_text()
               except (OSError, UnicodeDecodeError):
                   continue
-              updated, count = re.subn(r'(?m)^(\\s*)(compileSdkVersion|compileSdk)\\s*(?:=\\s*)?(?:flutter\\.compileSdkVersion|[0-9]+)', r'\\g<1>compileSdkVersion 36', text)
+              if path.suffix == '.kts':
+                  updated, count = re.subn(r'(?m)^(\\s*)compileSdk\\s*=\\s*(?:flutter\\.compileSdkVersion|[0-9]+)', r'\\g<1>compileSdk = 36', text)
+              else:
+                  updated, count = re.subn(r'(?m)^(\\s*)(?:compileSdkVersion|compileSdk)\\s*(?:=\\s*)?(?:flutter\\.compileSdkVersion|[0-9]+)', r'\\g<1>compileSdkVersion 36', text)
               if count and updated != text:
                   path.write_text(updated)
                   changed.append(str(path))
