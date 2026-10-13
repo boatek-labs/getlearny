@@ -97,3 +97,19 @@ html[data-theme="dark"] .ai-answer{background:#252144;color:#F0F0FA}
 .profile-link .dots{color:#C7C1F5}.exam-card{margin-bottom:10px}.side-label{margin-top:26px}
 @media(max-height:760px){.sidebar{padding-top:16px}.side-label{margin-top:20px}.nav-item{padding-top:10px;padding-bottom:10px}.exam-card{padding:12px}.exam-card p{line-height:1.4}}
 @media(max-width:760px){.sidebar{overflow-y:auto}.side-bottom{margin-top:24px}.profile-link{border-radius:12px;padding:10px 0;background:linear-gradient(135deg,#242044,#171A35);border:1px solid #373458}.profile-link .avatar{display:grid}.side-bottom .exam-card{display:none}}
+
+/* Dark theme readability: neutralise remaining hard-coded white surfaces and pale text. */
+html[data-theme="dark"]{--ink:#F1F2FF;--muted:#B7BAD0;--paper:#10111F;--line:#303148;--white:#17182A;--blue-soft:#282344;--gold-soft:#1D3040;color-scheme:dark}
+html[data-theme="dark"] body{background:var(--paper);color:var(--ink)}
+html[data-theme="dark"] .sidebar,html[data-theme="dark"] .profile-link,html[data-theme="dark"] .icon-button,html[data-theme="dark"] .stat-card,html[data-theme="dark"] .form-card,html[data-theme="dark"] .record,html[data-theme="dark"] .subject-card,html[data-theme="dark"] .practice-card,html[data-theme="dark"] .tip-card,html[data-theme="dark"] .lesson-panel,html[data-theme="dark"] .notification-card{background:#17182A;color:#F1F2FF;border-color:#303148}
+html[data-theme="dark"] .main,html[data-theme="dark"] .topbar{border-color:#303148}
+html[data-theme="dark"] h1,html[data-theme="dark"] h2,html[data-theme="dark"] h3,html[data-theme="dark"] b,html[data-theme="dark"] strong,html[data-theme="dark"] label,html[data-theme="dark"] .breadcrumb b{color:#F1F2FF}
+html[data-theme="dark"] p,html[data-theme="dark"] small,html[data-theme="dark"] .lead,html[data-theme="dark"] .form-hint,html[data-theme="dark"] .stat-card>span,html[data-theme="dark"] .stat-card small,html[data-theme="dark"] .subject-meta small{color:#B7BAD0}
+html[data-theme="dark"] input,html[data-theme="dark"] textarea,html[data-theme="dark"] select{background:#10111F;color:#F1F2FF;border:1px solid #393A55}
+html[data-theme="dark"] input::placeholder,html[data-theme="dark"] textarea::placeholder{color:#9295B0}
+html[data-theme="dark"] .nav-item{color:#C0C2D7}
+html[data-theme="dark"] .nav-item:hover,html[data-theme="dark"] .nav-item.active{background:#302852;color:#C5B9FF}
+html[data-theme="dark"] .exam-card,html[data-theme="dark"] .soft-pill,html[data-theme="dark"] .topic-choice,html[data-theme="dark"] .api-settings{background:#202137;color:#F1F2FF;border-color:#34354F}
+html[data-theme="dark"] .profile-link b{color:#fff}html[data-theme="dark"] .profile-link small{color:#D0CDEB}
+html[data-theme="dark"] .avatar img,.avatar img,.profile-photo-preview img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+.avatar{overflow:hidden}
