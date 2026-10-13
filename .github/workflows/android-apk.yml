@@ -68,6 +68,11 @@ jobs:
           if 'ScheduledNotificationBootReceiver' not in text:
               text = text.replace('</application>', receivers + '\n    </application>', 1)
           path.write_text(text)
+          drawable = Path('app/android/app/src/main/res/drawable')
+          drawable.mkdir(parents=True, exist_ok=True)
+          icon = drawable / 'ic_notification.xml'
+          icon.write_text('''<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"><path android:fillColor="#FFFFFFFF" android:pathData="M3,5.5 C6,4.2 9,4.6 12,6.4 L12,20 C9,18.2 6,17.8 3,19.1 Z"/><path android:fillColor="#FFFFFFFF" android:pathData="M21,5.5 C18,4.2 15,4.6 12,6.4 L12,20 C15,18.2 18,17.8 21,19.1 Z"/><path android:fillColor="#FFFFFFFF" android:pathData="M16,2 L17,4.5 L19.5,5.5 L17,6.5 L16,9 L15,6.5 L12.5,5.5 L15,4.5 Z"/></vector>''')
+          print('Created violet-brand-compatible Android notification glyph:', icon)
           PY
 
       - name: Enable Android notification scheduling support
