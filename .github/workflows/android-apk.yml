@@ -45,6 +45,31 @@ jobs:
           flutter create --platforms=android --org com.boateklabs --project-name getlearny /tmp/getlearny-android-scaffold
           cp -R /tmp/getlearny-android-scaffold/android app/android
 
+      - name: Configure Android notification permissions and reboot receiver
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/android/app/src/main/AndroidManifest.xml')
+          text = path.read_text()
+          permission = '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
+          boot_permission = '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'
+          if 'android.permission.POST_NOTIFICATIONS' not in text:
+              text = text.replace('<application', permission + '\\n' + boot_permission + '\\n    <application', 1)
+          receivers = '''
+                  <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+                  <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                          <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                          <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                          <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                      </intent-filter>
+                  </receiver>'''
+          if 'ScheduledNotificationBootReceiver' not in text:
+              text = text.replace('</application>', receivers + '\\n    </application>', 1)
+          path.write_text(text)
+          PY
+
       - name: Enable Android notification scheduling support
         run: |
           python3 - <<'PY'
