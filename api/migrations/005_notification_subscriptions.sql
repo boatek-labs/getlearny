@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS notification_subscriptions (
  timezone VARCHAR(100) NOT NULL DEFAULT 'Africa/Accra',
  reminder_time TIME NOT NULL DEFAULT '19:00',
  daily_reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+ last_reminder_date DATE,
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
