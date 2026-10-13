@@ -83,3 +83,17 @@ html[data-theme="dark"] .profile-photo-preview{border-color:#17182C}
 
 .document-ask{flex-basis:100%;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}.document-ask summary{cursor:pointer;color:#7057F5;font-weight:800;padding:6px 0}.document-ask-form{display:grid;gap:10px;padding-top:10px}.document-ask-form textarea{min-height:78px;resize:vertical}.document-ask-form .button{justify-self:start}.ai-answer{margin-top:8px;white-space:normal;line-height:1.65;color:var(--ink);background:var(--blue-soft);padding:12px;border-radius:12px;overflow-wrap:anywhere}
 html[data-theme="dark"] .ai-answer{background:#252144;color:#F0F0FA}
+
+
+/* Sidebar usability patch: scrollable navigation and a clearly surfaced account panel. */
+.sidebar{height:100dvh;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#49436f #11152B;padding-bottom:18px}
+.sidebar::-webkit-scrollbar{width:6px}.sidebar::-webkit-scrollbar-track{background:#11152B}.sidebar::-webkit-scrollbar-thumb{background:#49436f;border-radius:99px}
+.sidebar nav{flex:0 0 auto;min-height:min-content}
+.side-bottom{margin-top:24px;flex:0 0 auto}
+.profile-link{position:relative;border:1px solid #373458;border-radius:16px;padding:12px 10px 12px;background:linear-gradient(135deg,#242044,#171A35);color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.16);margin-top:10px;gap:10px}
+.profile-link:hover{border-color:#7057F5;background:linear-gradient(135deg,#30265e,#1b2041)}
+.profile-link b{color:#fff;font-size:12px;max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.profile-link small{color:#B9B5D8;max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profile-link .avatar{background:linear-gradient(135deg,#9BE7FF,#9D8CFF);color:#17172B;box-shadow:0 0 0 3px #ffffff12;flex:0 0 36px}
+.profile-link .dots{color:#C7C1F5}.exam-card{margin-bottom:10px}.side-label{margin-top:26px}
+@media(max-height:760px){.sidebar{padding-top:16px}.side-label{margin-top:20px}.nav-item{padding-top:10px;padding-bottom:10px}.exam-card{padding:12px}.exam-card p{line-height:1.4}}
+@media(max-width:760px){.sidebar{overflow-y:auto}.side-bottom{margin-top:24px}.profile-link{border-radius:12px;padding:10px 0;background:linear-gradient(135deg,#242044,#171A35);border:1px solid #373458}.profile-link .avatar{display:grid}.side-bottom .exam-card{display:none}}
