@@ -1,5 +1,5 @@
-const CACHE_NAME='getlearny-shell-v4';
-self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(['/','/index.html','/styles.css','/app.js?v=20261013-3','/manifest.json','/assets/getlearny-mark.svg']).catch(()=>{})));});
+const CACHE_NAME='getlearny-shell-v5';
+self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(['/','/index.html','/styles.css','/app.js?v=20261013-5','/manifest.json','/assets/getlearny-mark.svg']).catch(()=>{})));});
 self.addEventListener('activate',event=>{event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('getlearny-shell-')&&key!==CACHE_NAME).map(key=>caches.delete(key))))]));});
 self.addEventListener('message',event=>{if(event.data?.type==='SHOW_NOTIFICATION'){const data=event.data.payload||{};event.waitUntil(self.registration.showNotification(data.title||'GetLearny',{body:data.body||'Your study time is here.',icon:'/assets/getlearny-mark.svg',badge:'/assets/getlearny-mark.svg',tag:data.tag||'getlearny-reminder',data:{url:data.url||'/'},vibrate:[120,70,120]}));}});
 self.addEventListener('notificationclick',event=>{event.notification.close();const url=event.notification.data?.url||'/';event.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{for(const client of list){if('focus'in client){client.navigate(url);return client.focus();}}return self.clients.openWindow(url);}));});
