@@ -298,3 +298,11 @@ html[data-theme="dark"] #practice-status:not(:empty){background:#24213D;color:#E
 #subject-material-list .document-info p{overflow-wrap:anywhere}
 html[data-theme="dark"] .ocr-action .form-hint{color:#BFC0D8}
 @media(max-width:620px){.practice-meta{display:grid;grid-template-columns:1fr}.ocr-action{align-items:stretch}.ocr-action .button{width:100%}}
+
+
+/* Keep the connection/status pill readable in dark mode instead of leaving a white block. */
+html[data-theme="dark"] .top-actions{background:#17182C;border-color:#30314A;color:#C8C9E0}
+html[data-theme="dark"] #connection{color:#E7E7F5}
+html[data-theme="dark"] .icon-button{background:#202137;border-color:#373852;color:#E7E7F5}
+html[data-theme="dark"] .icon-button:hover{background:#292A43}
+html[data-theme="dark"] .status-dot{background:#9BE7FF;box-shadow:0 0 0 3px rgba(155,231,255,.12)}

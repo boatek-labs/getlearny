@@ -76,17 +76,18 @@ class ApiClient {
       ? http.post(uri, headers: _headers(), body: jsonEncode(body ?? {}))
       : method == 'PATCH'
         ? http.patch(uri, headers: _headers(), body: jsonEncode(body ?? {}))
-        : http.get(uri, headers: _headers())).timeout(const Duration(seconds: 20));
+        : http.get(uri, headers: _headers())).timeout(const Duration(seconds: 45));
     final decoded = response.body.isEmpty ? <String,dynamic>{} : jsonDecode(response.body) as Map<String,dynamic>;
     if (response.statusCode < 200 || response.statusCode >= 300) throw Exception(decoded['error'] ?? 'Request failed');
     return decoded;
   }
-  static Future<Map<String,dynamic>> upload(String path, PlatformFile file) async {
+  static Future<Map<String,dynamic>> upload(String path, PlatformFile file, {Map<String,String> fields=const {}}) async {
     if(token==null)throw Exception('Sign in first');
     final request=http.MultipartRequest('POST',Uri.parse('$apiBase$path'));
     request.headers['Authorization']='Bearer $token';
+    request.fields.addAll(fields);
     request.files.add(http.MultipartFile.fromBytes('file',file.bytes!,filename:file.name));
-    final streamed=await request.send().timeout(const Duration(seconds:30));
+    final streamed=await request.send().timeout(const Duration(seconds:90));
     final response=await http.Response.fromStream(streamed);
     final decoded=response.body.isEmpty?<String,dynamic>{}:jsonDecode(response.body) as Map<String,dynamic>;
     if(response.statusCode<200||response.statusCode>=300)throw Exception(decoded['error']??'Upload failed');
@@ -147,7 +148,7 @@ class OfflineLessonReader extends StatelessWidget {final Map<String,dynamic> ite
 
 class SubjectsPage extends StatelessWidget {
  const SubjectsPage({super.key});
- static const items=[['Mathematics','MATH'],['English Language','ENG'],['Integrated Science','SCI'],['Social Studies','SOC'],['Elective Mathematics','EMATH'],['ICT','ICT']];
+ static const items=[['Core Mathematics','MATH'],['English Language','ENG'],['Chemistry','CHEM'],['Biology','BIO'],['Social Studies','SOC'],['Additional Mathematics','EMATH'],['Computer Science','CS']];
  @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(20),children:[
   const SectionTitle('Your subjects'),const SizedBox(height:6),
   const Text('Subjects open a live catalogue from GetLearny. Topics and lessons are not fabricated when the service is unavailable.'),
@@ -164,8 +165,10 @@ class TopicListPage extends StatefulWidget {
  @override State<TopicListPage> createState()=>_TopicListPageState();
 }
 class _TopicListPageState extends State<TopicListPage>{
- bool loading=false,downloading=false; String error=''; List<Map<String,dynamic>> topics=[];
- String get code=>({'Mathematics':'MATH','Core Mathematics':'MATH','English':'ENG','English Language':'ENG','Chemistry':'SCI','Biology':'SCI','Integrated Science':'SCI','Social Studies':'SOC','Add Math':'EMATH','Additional Mathematics':'EMATH','Elective Mathematics':'EMATH','Computer Science':'ICT','ICT':'ICT'}[widget.subject]??widget.subject.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9_-]'),''));
+ bool loading=false,downloading=false,uploadingMaterial=false; String error=''; List<Map<String,dynamic>> topics=[];
+ final topicController=TextEditingController();
+ @override void dispose(){topicController.dispose();super.dispose();}
+ String get code=>({'Mathematics':'MATH','Core Mathematics':'MATH','English':'ENG','English Language':'ENG','Chemistry':'CHEM','Biology':'BIO','Integrated Science':'SCI','Social Studies':'SOC','Add Math':'EMATH','Additional Mathematics':'EMATH','Elective Mathematics':'EMATH','Computer Science':'CS','ICT':'ICT'}[widget.subject]??widget.subject.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9_-]'),''));
  @override void initState(){super.initState();_loadTopics();}
  Future<void> _loadTopics()async{
   await OfflineLessonStore.refresh();
@@ -174,6 +177,24 @@ class _TopicListPageState extends State<TopicListPage>{
   catch(e){if(mounted)setState(()=>error='Live topic catalogue unavailable. Downloaded lessons remain available offline.');}
   finally{if(mounted)setState(()=>loading=false);}
  }
+ Future<void> _uploadSubjectMaterial() async {
+  if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in before uploading study materials.')));return;}
+  try{
+   final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:const ['pdf','txt','md','markdown','csv','json','png','jpg','jpeg','webp'],withData:true);
+   if(picked==null)return;
+   final file=picked.files.single;
+   if(file.bytes==null)throw Exception('Could not read this file. Please choose it again.');
+   if(file.size>12*1024*1024)throw Exception('Choose a file smaller than 12 MB.');
+   if(!mounted)return;setState(()=>uploadingMaterial=true);
+   final result=await ApiClient.upload('/documents',file,fields:{'subject_name':widget.subject,'material_title':file.name});
+   final document=Map<String,dynamic>.from(result['document'] as Map? ?? {});
+   final status=document['processing_status']?.toString()??'uploaded';
+   final message=result['message']?.toString()??(status=='ready'?'Material saved and text extracted.':'Material uploaded.');
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('$message Open Files to view it.')));
+  }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Upload failed: ${e.toString().replaceFirst('Exception: ','')}')));}
+  finally{if(mounted)setState(()=>uploadingMaterial=false);}
+ }
+
  Future<void> _downloadThree()async{
   if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in before downloading lessons.')));return;}
   if(topics.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No live topics are available to download yet. Connect and retry.')));return;}
@@ -196,6 +217,12 @@ class _TopicListPageState extends State<TopicListPage>{
   FilledButton.icon(onPressed:loading||downloading?null:_downloadThree,icon:downloading?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.download_for_offline_outlined),label:Text(downloading?'Downloading lessons…':'Download next 3 lessons · keep offline 7 days')),
   const SizedBox(height:12),
   OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>OfflineLessonsPage(subject:widget.subject))),icon:const Icon(Icons.library_books_outlined),label:const Text('Open saved lessons')),
+  const SizedBox(height:8),
+  OutlinedButton.icon(onPressed:uploadingMaterial?null:_uploadSubjectMaterial,icon:uploadingMaterial?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.upload_file_outlined),label:Text(uploadingMaterial?'Uploading and processing…':'Upload subject material · OCR')),
+  const SizedBox(height:16),
+  TextField(controller:topicController,textInputAction:TextInputAction.go,onSubmitted:(value){final topic=value.trim();if(topic.isNotEmpty)Navigator.of(context).push(MaterialPageRoute(builder:(_)=>LessonPage(subject:widget.subject,topic:topic)));},decoration:const InputDecoration(labelText:'Study any topic',hintText:'Type a topic to learn, even if it is not in the catalogue',prefixIcon:Icon(Icons.search))),
+  const SizedBox(height:8),
+  FilledButton.icon(onPressed:(){final topic=topicController.text.trim();if(topic.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a topic first.')));return;}Navigator.of(context).push(MaterialPageRoute(builder:(_)=>LessonPage(subject:widget.subject,topic:topic)));},icon:const Icon(Icons.auto_stories_outlined),label:const Text('Generate lesson for this topic')),
   const SizedBox(height:16),
   if(loading)const Center(child:Padding(padding:EdgeInsets.all(28),child:CircularProgressIndicator())),
   if(error.isNotEmpty)...[Text(error,style:const TextStyle(color:Colors.deepOrange)),TextButton.icon(onPressed:_loadTopics,icon:const Icon(Icons.refresh),label:const Text('Retry'))],
@@ -219,8 +246,8 @@ class _LessonPageState extends State<LessonPage>{bool busy=false;String? lesson;
 
 class PracticePage extends StatefulWidget {const PracticePage({super.key});@override State<PracticePage> createState()=>_PracticePageState();}
 class _PracticePageState extends State<PracticePage>{
- final topicController=TextEditingController();String subject='Mathematics';int count=10;bool loading=false,grading=false,finished=false;int secondsLeft=0,score=0,currentIndex=0;Timer? timer;String feedback='';List<Map<String,dynamic>> questions=[];List<int?> answers=[];
- static const subjects=['Mathematics','English Language','Integrated Science','Chemistry','Biology','Social Studies','Elective Mathematics','ICT'];
+ final topicController=TextEditingController();String subject='Core Mathematics';int count=10;bool loading=false,grading=false,finished=false,gradingFailed=false;int secondsLeft=0,score=0,currentIndex=0;Timer? timer;String feedback='',gradeError='';List<Map<String,dynamic>> questions=[];List<int?> answers=[];
+ static const subjects=['Core Mathematics','English Language','Chemistry','Biology','Social Studies','Additional Mathematics','Computer Science'];
  @override void dispose(){timer?.cancel();topicController.dispose();super.dispose();}
  Future<void> generate()async{
   if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in from Profile to generate AI practice.')));return;}
@@ -228,11 +255,11 @@ class _PracticePageState extends State<PracticePage>{
  }
  void startTimer(){timer?.cancel();timer=Timer.periodic(const Duration(seconds:1),(t){if(!mounted)return;if(secondsLeft<=1){setState(()=>secondsLeft=0);t.cancel();grade(expired:true);}else setState(()=>secondsLeft--);});}
  Future<void> grade({bool expired=false})async{
-  if(finished||questions.isEmpty)return;timer?.cancel();setState(()=>grading=true);
+  if(finished||questions.isEmpty)return;timer?.cancel();setState((){grading=true;gradingFailed=false;gradeError='';});
   try{final r=await ApiClient.request('/practice/grade',method:'POST',body:{'subject':subject,'questions':questions.map((q)=>{'question':q['question'],'options':q['options'],'answer':q['answer'],'explanation':q['explanation']??''}).toList(),'answers':answers});score=(r['score'] as num? ?? 0).toInt();feedback=r['feedback']?.toString()??'';try{await ApiClient.request('/tests',method:'POST',body:{'subject':subject,'title':'Timed AI practice','score':score,'max_score':questions.length});}catch(_){}}
-  catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not grade this attempt: ${e.toString().replaceFirst('Exception: ','')}')));return;}
+  catch(e){if(mounted)setState((){gradingFailed=true;gradeError=e.toString().replaceFirst('Exception: ','');});}
   finally{if(mounted)setState(()=>grading=false);}
-  if(mounted)setState(()=>finished=true);
+  if(mounted&&!gradingFailed)setState(()=>finished=true);
  }
  @override Widget build(BuildContext context){
   if(questions.isEmpty)return Scaffold(appBar:AppBar(title:const Text('AI practice')),body:ListView(padding:const EdgeInsets.all(20),children:[const SectionTitle('Build a timed practice set'),const SizedBox(height:8),const Text('Questions are generated by the live AI service. No sample questions are substituted.'),const SizedBox(height:18),DropdownButtonFormField<String>(value:subject,decoration:const InputDecoration(labelText:'Subject'),items:subjects.map((s)=>DropdownMenuItem(value:s,child:Text(s))).toList(),onChanged:(v){if(v!=null)setState(()=>subject=v);}),const SizedBox(height:12),TextField(controller:topicController,decoration:const InputDecoration(labelText:'Topic (optional)',hintText:'Enter a topic from your class notes')),const SizedBox(height:12),DropdownButtonFormField<int>(value:count,decoration:const InputDecoration(labelText:'Questions · one minute each'),items:const [5,10,15].map((n)=>DropdownMenuItem(value:n,child:Text('$n questions · $n minutes'))).toList(),onChanged:(v){if(v!=null)setState(()=>count=v);}),const SizedBox(height:18),FilledButton.icon(onPressed:loading?null:generate,icon:loading?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.auto_awesome),label:Text(loading?'Generating from AI…':'Generate timed exam'))]));
@@ -240,7 +267,7 @@ class _PracticePageState extends State<PracticePage>{
   final index=currentIndex.clamp(0,questions.length-1);
   final q=questions[index];
   final options=(q['options'] as List? ?? []).map((e)=>e.toString()).toList();
-  return Scaffold(appBar:AppBar(title:Text(subject),actions:[Padding(padding:const EdgeInsets.all(16),child:Center(child:Text('${secondsLeft~/60}:${(secondsLeft%60).toString().padLeft(2,'0')}',style:TextStyle(fontWeight:FontWeight.w900,color:secondsLeft<=60?Colors.red:blue))))]),body:ListView(padding:const EdgeInsets.all(20),children:[Text('QUESTION ${index+1} OF ${questions.length}',style:const TextStyle(color:blue,fontWeight:FontWeight.w800,letterSpacing:1.2)),const SizedBox(height:12),Text(q['question']?.toString()??'',style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),const SizedBox(height:18),...options.asMap().entries.map((e)=>Card(child:RadioListTile<int>(value:e.key,groupValue:answers[index],onChanged:grading?null:(v)=>setState(()=>answers[index]=v),title:Text(e.value)))),const SizedBox(height:18),FilledButton(onPressed:grading?null:()=>index==questions.length-1?grade():setState(()=>currentIndex=index+1),child:Text(grading?'Grading…':index==questions.length-1?'Submit and grade':'Next question'))]));
+  return Scaffold(appBar:AppBar(title:Text(subject),actions:[Padding(padding:const EdgeInsets.all(16),child:Center(child:Text('${secondsLeft~/60}:${(secondsLeft%60).toString().padLeft(2,'0')}',style:TextStyle(fontWeight:FontWeight.w900,color:secondsLeft<=60?Colors.red:blue))))]),body:ListView(padding:const EdgeInsets.all(20),children:[Text('QUESTION ${index+1} OF ${questions.length}',style:const TextStyle(color:blue,fontWeight:FontWeight.w800,letterSpacing:1.2)),const SizedBox(height:12),Text(q['question']?.toString()??'',style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900)),const SizedBox(height:18),...options.asMap().entries.map((e)=>Card(child:RadioListTile<int>(value:e.key,groupValue:answers[index],onChanged:grading||gradingFailed?null:(v)=>setState(()=>answers[index]=v),title:Text(e.value)))),if(gradingFailed)...[Text('Your answers are locked, but the server could not finish grading: $gradeError',style:const TextStyle(color:Colors.deepOrange)),const SizedBox(height:8),FilledButton.icon(onPressed:grading?null:grade,icon:const Icon(Icons.refresh),label:const Text('Retry grading'))],const SizedBox(height:18),if(!gradingFailed)FilledButton(onPressed:grading?null:()=>index==questions.length-1?grade():setState(()=>currentIndex=index+1),child:Text(grading?'Grading…':index==questions.length-1?'Submit and grade':'Next question'))]));
  }
 }
 
