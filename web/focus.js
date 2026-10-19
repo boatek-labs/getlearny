@@ -36,7 +36,7 @@
     if (session && remaining===0) finish(true);
   }
   function start() {
-    if (!window.state?.token) { setStatus('Sign in first so your focus session can be saved to your account.'); window.showView?.('profile'); return; }
+    if (!(typeof state !== 'undefined' && state.token)) { setStatus('Sign in first so your focus session can be saved to your account.'); window.showView?.('profile'); return; }
     const topic = safe($('#focus-topic')?.value).trim();
     if (!topic) { setStatus('Enter the topic you are studying before starting.'); $('#focus-topic')?.focus(); return; }
     if (running) return;
@@ -62,18 +62,19 @@
     const minutes=Math.max(1,Math.round(elapsed/60));
     setStatus('Saving your focus session…');
     try {
-      await window.api('/learning-logs',{method:'POST',body:JSON.stringify({
+      await api('/learning-logs',{method:'POST',body:JSON.stringify({
         subject:session.subject,topic:session.topic,minutes_spent:minutes,
         status:completed?'completed':'started',
         notes:'Focus studio session'+(completed?' completed':' ended early')+'. Timer duration: '+session.length+' minutes.'
       })});
       setStatus((completed?'Session complete! ':'Session saved. ')+minutes+' minute'+(minutes===1?'':'s')+' added to your learning record.');
-      if (typeof window.loadDashboard==='function') window.loadDashboard();
+      if (typeof loadDashboard==='function') loadDashboard();
     } catch (error) {
-      setStatus('Could not save this session: '+(error?.message||'Connection error')+'. Keep this page open and try again after reconnecting.');
+      setStatus('Could not save this session: '+(error?.message||'Connection error')+'. Your session is kept here; reconnect and tap Finish & save to retry.');
       $('#focus-finish').disabled=false;
+      return;
     }
-    if (completed) window.toast?.('Focus session completed and saved.');
+    if (completed) { if (typeof toast==='function') toast('Focus session completed and saved.'); }
     session=null; elapsed=0;
     $('#focus-start').disabled=false; $('#focus-pause').disabled=true; $('#focus-finish').disabled=true;
     $('#focus-subject').disabled=false; $('#focus-topic').disabled=false; $('#focus-length').disabled=false;
