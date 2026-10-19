@@ -78,6 +78,7 @@ async function loadDashboard(){
     $('#stat-tests').textContent=localTests.length;$('#stat-journal').textContent=localJournal.length;
   }
   renderRecords();
+  if(typeof renderRevisionInsights==='function')renderRevisionInsights();
   $('#user-name').textContent=state.user?.name||'Student';
   $('#auth-state').textContent=state.token?'Account connected':'Sign in to sync your progress';
   $('#greeting').textContent=`${state.user?.name?`Welcome back, ${state.user.name.split(' ')[0]}.`:'A little progress adds up.'}`;
