@@ -131,25 +131,78 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
  const parsed=z.object({subject:z.string().trim().min(1).max(100),topic:z.string().trim().max(200).optional().default(''),level:z.string().max(100).optional().default('Not specified'),count:z.number().int().min(5).max(15).default(10)}).safeParse(req.body);
  if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
  const {subject,topic,level,count}=parsed.data;
- const system='Create accurate age-appropriate multiple choice practice for a Ghanaian secondary student. Return only JSON object with key questions, an array of exactly requested count. Each item has question string, options array of exactly 4 strings, answer integer 0-3, explanation string, topic string. Exactly one correct answer per question. No markdown.';
- const prompt='Create '+count+' original questions. Subject: '+subject+'; class level: '+level+'; topic: '+(topic||'balanced core concepts')+'. Follow the schema exactly.';
- const validQuestions=qs=>Array.isArray(qs)&&qs.length===count&&qs.every(q=>typeof q.question==='string'&&q.question.trim()&&Array.isArray(q.options)&&q.options.length===4&&q.options.every(o=>typeof o==='string'&&o.trim())&&Number.isInteger(q.answer)&&q.answer>=0&&q.answer<4&&typeof q.explanation==='string'&&q.explanation.trim());
- // Primary provider: Gemini. OpenRouter is used only if Gemini fails or returns invalid output.
- const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:3600,json:true});
- if(geminiText){try{const decoded=JSON.parse(geminiText.replace(/^\x60\x60\x60(?:json)?\s*/i,'').replace(/\s*\x60\x60\x60$/,''));if(validQuestions(decoded.questions))return res.json({questions:decoded.questions,generatedBy:'gemini',subject,model:process.env.GEMINI_MODEL||'gemini-3.8-flash'});}catch{console.warn('Gemini practice response was not valid JSON or did not match the requested schema.');}}
+ const system='You are an assessment writer for Ghanaian SHS students. Return one JSON object with a questions array. Generate at least '+count+' and no more than '+count+' original multiple-choice questions. Every question must have question (string), options (exactly 4 distinct strings), answer (zero-based integer 0,1,2,3), and explanation (string). Exactly one option must be correct. Avoid duplicate questions, ambiguous wording, trick questions, and unsupported syllabus claims. Return JSON only, no markdown.';
+ const prompt='Create exactly '+count+' useful exam-practice questions. Subject: '+subject+'. Level: '+level+'. Topic: '+(topic||'a balanced selection of foundational topics in this subject')+'. Use clear language and plausible distractors. Ensure the answer index points to the one correct option. Return {"questions":[...]} only.';
+ const cleanText=value=>typeof value==='string'?value.trim():'';
+ function parseQuestions(raw){
+  if(typeof raw!=='string')return null;
+  let text=raw.trim().replace(/^\x60\x60\x60(?:json)?\s*/i,'').replace(/\s*\x60\x60\x60$/,'').trim();
+  let decoded;
+  try{decoded=JSON.parse(text)}catch{
+   const first=text.indexOf('{'),last=text.lastIndexOf('}');
+   if(first<0||last<=first)return null;
+   try{decoded=JSON.parse(text.slice(first,last+1))}catch{return null}
+  }
+  let list=Array.isArray(decoded)?decoded:decoded?.questions||decoded?.items||decoded?.practice;
+  if(!Array.isArray(list)||list.length<count)return null;
+  list=list.slice(0,count);
+  const questions=[];
+  for(const item of list){
+   if(!item||typeof item!=='object')return null;
+   const question=cleanText(item.question||item.text||item.prompt);
+   const rawOptions=item.options||item.choices||item.answers;
+   if(!question||!Array.isArray(rawOptions)||rawOptions.length!==4)return null;
+   const options=rawOptions.map(o=>cleanText(typeof o==='string'?o:(o?.text||o?.label||o?.option)));
+   if(options.some(o=>!o)||new Set(options.map(o=>o.toLowerCase())).size!==4)return null;
+   let answer=item.answer??item.correctAnswer??item.correct_answer??item.correctOption??item.correct_option;
+   if(typeof answer==='string'){
+    const letter=answer.trim().match(/^([A-D])(?:[).:]|$)/i);
+    if(letter)answer=letter[1].toUpperCase().charCodeAt(0)-65;
+    else if(/^\d+$/.test(answer.trim()))answer=Number(answer.trim());
+    else {const matched=options.findIndex(o=>o.toLowerCase()===answer.trim().toLowerCase());answer=matched;}
+   }
+   if(Number.isInteger(answer)&&answer===4)answer=3;
+   if(!Number.isInteger(answer)||answer<0||answer>3)return null;
+   const explanation=cleanText(item.explanation||item.reason||item.rationale);
+   questions.push({question,options,answer,explanation,topic:cleanText(item.topic)||topic||subject});
+  }
+  return questions.length===count?questions:null;
+ }
+ // Gemini is the primary provider. If its output is malformed, try OpenRouter models in order.
+ const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:5200,json:true,temperature:0.2});
+ const geminiQuestions=parseQuestions(geminiText);
+ if(geminiQuestions)return res.json({questions:geminiQuestions,generatedBy:'gemini',subject,model:process.env.GEMINI_MODEL||'gemini-3.8-flash'});
  const key=process.env.OPENROUTER_API_KEY;
- if(!key)return fail(res,503,'Gemini could not generate valid practice and OpenRouter is not configured. Add OPENROUTER_API_KEY to the API deployment environment.');
- const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,3);
- let lastStatus=0;
- for(const model of models){try{
-  const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny'},body:JSON.stringify({model,temperature:0.4,max_tokens:3600,response_format:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:prompt}]}),signal:AbortSignal.timeout(8000)});
-  lastStatus=response.status;if(!response.ok)continue;
-  const data=await response.json();let content=data.choices?.[0]?.message?.content;if(typeof content!=='string')continue;
-  content=content.trim().replace(/^\x60\x60\x60(?:json)?\s*/i,'').replace(/\s*\x60\x60\x60$/,'');
-  const decoded=JSON.parse(content);if(!validQuestions(decoded.questions))continue;
-  return res.json({questions:decoded.questions,generatedBy:'openrouter',subject,model});
- }catch{}}
- return fail(res,502,lastStatus===401?'OpenRouter rejected its API key. Verify the key in the API deployment environment.':lastStatus===402?'OpenRouter reports insufficient credits or a payment limit.':lastStatus===429?'OpenRouter rate limit reached. Try again shortly.':'Gemini and OpenRouter could not generate a valid practice set. Check provider configuration and model availability, then retry.');
+ if(!key)return fail(res,503,'Gemini did not return a valid practice set, and OpenRouter is not configured. Check GEMINI_API_KEY and add OPENROUTER_API_KEY in the Vercel API environment.');
+ const configured=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean),'google/gemma-3-27b-it:free','qwen/qwen3-30b-a3b:free','meta-llama/llama-3.3-70b-instruct:free','openrouter/free'];
+ const models=configured.map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,4);
+ let lastStatus=0,attempted=[];
+ for(const model of models){
+  // Try JSON mode first, then a plain JSON-only prompt for providers that reject JSON mode.
+  for(const jsonMode of [true,false]){
+   try{
+    const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+     method:'POST',
+     headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny'},
+     body:JSON.stringify({model,temperature:0.2,max_tokens:5200,...(jsonMode?{response_format:{type:'json_object'}}:{}),messages:[{role:'system',content:system},{role:'user',content:prompt}]}),
+     signal:AbortSignal.timeout(5200)
+    });
+    lastStatus=response.status;
+    if(!response.ok){console.warn('OpenRouter practice generation failed for',model,'HTTP',response.status);if(response.status===401||response.status===402)break;continue;}
+    const data=await response.json();
+    const message=data.choices?.[0]?.message;
+    const content=typeof message?.content==='string'?message.content:Array.isArray(message?.content)?message.content.map(part=>part?.text||'').join('\n'):'';
+    const questions=parseQuestions(content);
+    if(questions)return res.json({questions,generatedBy:'openrouter',subject,model});
+    attempted.push(model+': invalid output');
+    // Retry this model without JSON mode only when the JSON-mode response was malformed.
+    if(!jsonMode)console.warn('OpenRouter returned malformed practice JSON for',model);
+   }catch(error){attempted.push(model+': '+(error?.name||'request error'));if(!jsonMode)console.warn('OpenRouter practice request failed for',model,error?.name||'request error');}
+  }
+ }
+ const reason=lastStatus===401?'OpenRouter rejected its API key. Check OPENROUTER_API_KEY in Vercel.':lastStatus===402?'OpenRouter reports a payment or credit limit.':lastStatus===429?'OpenRouter rate limit reached. Try again shortly.':lastStatus===404?'The configured OpenRouter model was not found. Check OPENROUTER_MODEL and OPENROUTER_FALLBACK_MODELS.':'Both providers failed to return a valid '+count+'-question set. Check that GEMINI_MODEL is a supported Gemini API model and that the configured OpenRouter models are available. Retry in a moment.';
+ console.warn('Practice generation exhausted provider fallbacks:',{lastStatus,attempted});
+ return fail(res,502,reason);
 }));
 const lessonInput=z.object({subject:z.string().trim().min(1).max(100),topic:z.string().trim().min(1).max(200),level:z.string().max(30).default('SHS 3'),exam:z.string().max(30).default('WASSCE')});
 app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{

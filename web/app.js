@@ -107,6 +107,15 @@ function renderDocuments(rows){
  target.querySelectorAll('.document-ask-form').forEach(form=>form.addEventListener('submit',async e=>{e.preventDefault();const button=form.querySelector('button[type="submit"]'),message=form.querySelector('.form-message'),question=new FormData(form).get('question');button.disabled=true;message.textContent='The tutor is reading your file…';try{const r=await api('/documents/'+encodeURIComponent(form.dataset.documentId)+'/ask',{method:'POST',body:JSON.stringify({question})});message.innerHTML='<strong>GetLearny tutor</strong><div class="ai-answer">'+esc(r.answer).split(String.fromCharCode(10)).join('<br>')+'</div>';}catch(err){message.textContent=err.message;}finally{button.disabled=false;}}));
 }
 async function loadDocuments(){if(!state.token){$('#document-list').innerHTML='<article class="record"><p>Sign in to upload and access your private study materials.</p><button class="button button-primary" id="document-signin" type="button">Open account</button></article>';const b=$('#document-signin');if(b)b.onclick=()=>showView('profile');return;}try{const r=await api('/documents');renderDocuments(r.documents||[])}catch(e){$('#document-list').innerHTML='<article class="record"><p>'+esc(e.message)+'</p></article>';}}
+
+function closeMobileNav(){document.body.classList.remove('mobile-nav-open');const toggle=$('#mobile-menu-toggle');if(toggle)toggle.setAttribute('aria-expanded','false');}
+$('#mobile-menu-toggle')?.addEventListener('click',()=>{const open=!document.body.classList.contains('mobile-nav-open');document.body.classList.toggle('mobile-nav-open',open);$('#mobile-menu-toggle').setAttribute('aria-expanded',String(open));});
+$('#mobile-nav-backdrop')?.addEventListener('click',closeMobileNav);
+$('#nav')?.addEventListener('click',event=>{if(event.target.closest('[data-view]'))closeMobileNav();});
+$('#profile-open')?.addEventListener('click',()=>{closeMobileNav();showView('profile');});
+window.addEventListener('keydown',event=>{if(event.key==='Escape')closeMobileNav();});
+window.addEventListener('resize',()=>{if(window.innerWidth>760)closeMobileNav();});
+
 $('#theme-toggle').addEventListener('click',()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark'));
 $('#document-form').addEventListener('submit',async e=>{e.preventDefault();if(!state.token){toast('Sign in before uploading files.');showView('profile');return;}const file=$('#document-file').files[0];if(!file)return;if(file.size>12*1024*1024){$('#document-message').textContent='Choose a file smaller than 12 MB.';return;}const body=new FormData();body.append('file',file);body.append('subject_name',$('#document-subject').value||'General');$('#document-message').textContent='Uploading…';try{const r=await api('/documents',{method:'POST',body});$('#document-message').textContent=r.message||'Upload complete.';e.currentTarget.reset();await loadDocuments();toast('Study material saved.')}catch(err){$('#document-message').textContent=err.message;}});
 $('#refresh-documents').addEventListener('click',loadDocuments);
