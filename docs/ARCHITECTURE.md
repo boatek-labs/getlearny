@@ -4,7 +4,7 @@
 
 - Flutter client (`app/`) targets Android. It keeps the interface navigable without an API and uses `GETLEARNY_API_URL` to connect to the API.
 - Express API (`api/`) is a separate deployable service. PostgreSQL stores accounts, subjects/topics, learning logs, test logs, journal entries, quiz attempts, and document metadata.
-- OpenRouter lesson generation is optional. The server always has a built-in lesson fallback, and the API key remains server-side.
+- All generative AI workflows use Google's Gemini API through the Express server, including lessons, practice generation, grading feedback, scanned-PDF OCR and document tutoring. The Gemini API key remains server-side; failures return clear errors instead of fabricated fallback content.
 - GitHub Actions builds a debug APK artifact. A release APK/AAB requires signing secrets and a release workflow configured by the repository owner.
 
 ## API routes

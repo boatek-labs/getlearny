@@ -20,13 +20,13 @@ npm run db:migrate
 npm run dev
 ```
 
-Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, and optionally `OPENROUTER_API_KEY` in `api/.env`. For background browser push, also configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT`; generate the key pair with `npx web-push generate-vapid-keys` and never commit the private key. Without an OpenRouter key, lesson generation uses a built-in fallback lesson. Copy the root `.env.example` or `api/.env.example` and replace placeholders locally.
+Set `DATABASE_URL`, a random `JWT_SECRET` with at least 32 characters, `GEMINI_API_KEY`, and `GEMINI_MODEL=gemini-3.8-flash` in `api/.env`. All generative AI features use Gemini through the server-side API; no provider key is shipped to the web or Android client. For background browser push, also configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT`; generate the key pair with `npx web-push generate-vapid-keys` and never commit the private key. If Gemini is unavailable, the app reports an error rather than substituting invented lessons or questions. Copy the root `.env.example` or `api/.env.example` and replace placeholders locally.
 
 ## Deploy to Vercel + Neon PostgreSQL
 
 1. Import this repository into Vercel and keep the project root as the repository root.
 2. Vercel uses `vercel.json`: it serves the `web/` directory and routes `/api/*` to the Express serverless handler in `api/[...path].js`.
-3. In **Vercel → Project → Settings → Environment Variables**, add `DATABASE_URL` using your Neon pooled connection string, `JWT_SECRET` as a newly generated random secret of at least 32 characters, and `APP_URL` as the production HTTPS URL. Add `OPENROUTER_API_KEY` for AI lesson generation, `OPENROUTER_MODEL=openrouter/free`, and optional `OPENROUTER_FALLBACK_MODELS` as a comma-separated list of free model IDs. Never commit actual secrets.
+3. In **Vercel → Project → Settings → Environment Variables**, add `DATABASE_URL` using your Neon pooled connection string, `JWT_SECRET` as a newly generated random secret of at least 32 characters, `APP_URL` as the production HTTPS URL, `GEMINI_API_KEY`, and `GEMINI_MODEL=gemini-3.8-flash`. Keep the Gemini key server-side and never commit it.
 4. Add `CORS_ORIGINS` only when using a separate frontend domain; for a same-origin deployment the app works at `/api/v1` by default. Include the production URL if you set a restrictive allow-list.
 5. Run the database migrations once against Neon from a trusted terminal after setting `DATABASE_URL`: `npm run db:migrate`. Do not run migrations as part of every Vercel build. The migration workflow can also run after migration files are merged, provided the GitHub Actions `DATABASE_URL` secret is configured.
 6. Redeploy after setting environment variables. Check `https://YOUR-VERCEL-DOMAIN/api/v1/health` and confirm the database reports connected.
@@ -63,7 +63,7 @@ In the Android app, open a subject while online and choose **Download next 3 les
 
 ## Current functionality
 - SHS/WASSCE-oriented subject paths and practice
-- Optional OpenRouter lesson generation with a built-in fallback
+- Gemini-powered lessons, practice generation, grading feedback, scanned-PDF OCR, and document tutoring; failed AI requests are reported rather than replaced with fake content
 - Registration/login with hashed passwords and expiring JWTs
 - User-scoped learning logs, test results, and journal entries
 - PostgreSQL migration runner with migration history
@@ -73,16 +73,13 @@ In the Android app, open a subject while online and choose **Download next 3 les
 ## Production checklist
 Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, email verification and password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Google OAuth, OCR, push notifications, and Play Store signing require real provider credentials and are not faked by this starter.
 
-## OpenRouter AI environment template
+## Gemini AI environment template
 
-Set these variables in **Vercel → Project → Settings → Environment Variables** (Production and Preview if needed). Enter the real key directly in the provider dashboard; do not paste it into source code or chat.
+Configure these variables in Vercel (Production, Preview, and Development as appropriate) and in `api/.env` for local development:
 
 ```dotenv
-OPENROUTER_API_KEY=sk-or-v1-your-real-key
-OPENROUTER_MODEL=openrouter/free
-OPENROUTER_FALLBACK_MODELS=google/gemma-4-31b-it:free,nvidia/nemotron-3-ultra-550b-a55b:free,qwen/qwen3.8-27b:free
-OPENROUTER_SITE_URL=https://getlearny.vercel.app
-OPENROUTER_APP_NAME=GetLearny
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-3.8-flash
 ```
 
-The `openrouter/free` router automatically selects an available free model. Named free models are fallback options, not a guarantee: IDs and provider availability change, and free endpoints have rate limits. Check the current [OpenRouter free-model catalogue](https://openrouter.ai/collections/free-models/) before pinning a model.
+The Gemini API key must only be read by the server. Never place it in browser JavaScript or Flutter app configuration. Check Google's official Gemini API model documentation for supported model IDs and availability.
