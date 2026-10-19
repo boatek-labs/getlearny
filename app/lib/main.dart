@@ -148,7 +148,7 @@ class OfflineLessonReader extends StatelessWidget {final Map<String,dynamic> ite
 
 class SubjectsPage extends StatelessWidget {
  const SubjectsPage({super.key});
- static const items=[['Mathematics','MATH'],['English Language','ENG'],['Integrated Science','SCI'],['Social Studies','SOC'],['Elective Mathematics','EMATH'],['ICT','ICT']];
+ static const items=[['Core Mathematics','MATH'],['English Language','ENG'],['Chemistry','CHEM'],['Biology','BIO'],['Social Studies','SOC'],['Additional Mathematics','EMATH'],['Computer Science','CS']];
  @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(20),children:[
   const SectionTitle('Your subjects'),const SizedBox(height:6),
   const Text('Subjects open a live catalogue from GetLearny. Topics and lessons are not fabricated when the service is unavailable.'),
@@ -166,7 +166,9 @@ class TopicListPage extends StatefulWidget {
 }
 class _TopicListPageState extends State<TopicListPage>{
  bool loading=false,downloading=false,uploadingMaterial=false; String error=''; List<Map<String,dynamic>> topics=[];
- String get code=>({'Mathematics':'MATH','Core Mathematics':'MATH','English':'ENG','English Language':'ENG','Chemistry':'SCI','Biology':'SCI','Integrated Science':'SCI','Social Studies':'SOC','Add Math':'EMATH','Additional Mathematics':'EMATH','Elective Mathematics':'EMATH','Computer Science':'ICT','ICT':'ICT'}[widget.subject]??widget.subject.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9_-]'),''));
+ final topicController=TextEditingController();
+ @override void dispose(){topicController.dispose();super.dispose();}
+ String get code=>({'Mathematics':'MATH','Core Mathematics':'MATH','English':'ENG','English Language':'ENG','Chemistry':'CHEM','Biology':'BIO','Integrated Science':'SCI','Social Studies':'SOC','Add Math':'EMATH','Additional Mathematics':'EMATH','Elective Mathematics':'EMATH','Computer Science':'CS','ICT':'ICT'}[widget.subject]??widget.subject.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9_-]'),''));
  @override void initState(){super.initState();_loadTopics();}
  Future<void> _loadTopics()async{
   await OfflineLessonStore.refresh();
@@ -218,6 +220,10 @@ class _TopicListPageState extends State<TopicListPage>{
   const SizedBox(height:8),
   OutlinedButton.icon(onPressed:uploadingMaterial?null:_uploadSubjectMaterial,icon:uploadingMaterial?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.upload_file_outlined),label:Text(uploadingMaterial?'Uploading and processing…':'Upload subject material · OCR')),
   const SizedBox(height:16),
+  TextField(controller:topicController,textInputAction:TextInputAction.go,onSubmitted:(value){final topic=value.trim();if(topic.isNotEmpty)Navigator.of(context).push(MaterialPageRoute(builder:(_)=>LessonPage(subject:widget.subject,topic:topic)));},decoration:const InputDecoration(labelText:'Study any topic',hintText:'Type a topic to learn, even if it is not in the catalogue',prefixIcon:Icon(Icons.search))),
+  const SizedBox(height:8),
+  FilledButton.icon(onPressed:(){final topic=topicController.text.trim();if(topic.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a topic first.')));return;}Navigator.of(context).push(MaterialPageRoute(builder:(_)=>LessonPage(subject:widget.subject,topic:topic)));},icon:const Icon(Icons.auto_stories_outlined),label:const Text('Generate lesson for this topic')),
+  const SizedBox(height:16),
   if(loading)const Center(child:Padding(padding:EdgeInsets.all(28),child:CircularProgressIndicator())),
   if(error.isNotEmpty)...[Text(error,style:const TextStyle(color:Colors.deepOrange)),TextButton.icon(onPressed:_loadTopics,icon:const Icon(Icons.refresh),label:const Text('Retry'))],
   if(!loading&&error.isEmpty&&topics.isEmpty)const Text('No topics are published for this subject yet.'),
@@ -241,7 +247,7 @@ class _LessonPageState extends State<LessonPage>{bool busy=false;String? lesson;
 class PracticePage extends StatefulWidget {const PracticePage({super.key});@override State<PracticePage> createState()=>_PracticePageState();}
 class _PracticePageState extends State<PracticePage>{
  final topicController=TextEditingController();String subject='Mathematics';int count=10;bool loading=false,grading=false,finished=false;int secondsLeft=0,score=0,currentIndex=0;Timer? timer;String feedback='';List<Map<String,dynamic>> questions=[];List<int?> answers=[];
- static const subjects=['Mathematics','English Language','Integrated Science','Chemistry','Biology','Social Studies','Elective Mathematics','ICT'];
+ static const subjects=['Core Mathematics','English Language','Chemistry','Biology','Social Studies','Additional Mathematics','Computer Science'];
  @override void dispose(){timer?.cancel();topicController.dispose();super.dispose();}
  Future<void> generate()async{
   if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in from Profile to generate AI practice.')));return;}
