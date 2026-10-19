@@ -279,3 +279,22 @@ html[data-theme="dark"] .upload-dropzone small{color:#B7B8D0}
 button.subject-card{width:100%;font:inherit;text-align:left;color:inherit;}
 button.subject-card .subject-meta{display:block;}
 button.subject-card .subject-arrow{margin-left:auto;flex-shrink:0;}
+
+/* Clear, consistent exam-builder layout and OCR controls. */
+.practice-form-grid{display:grid;align-items:start}
+.practice-meta{display:flex;flex-wrap:wrap;align-items:center}
+.practice-form-grid label{line-height:1.4}
+.practice-form-grid label span{line-height:1.45}
+.practice-form-grid select,.practice-form-grid input{display:block;width:100%;min-height:50px}
+.practice-builder-heading p{font-size:13px}
+.practice-generate-button{display:inline-flex;align-items:center;justify-content:center}
+#practice-status:not(:empty){padding:12px 14px;border-radius:12px;background:var(--blue-soft);color:var(--ink)}
+html[data-theme="dark"] #practice-status:not(:empty){background:#24213D;color:#EAE8FF}
+.ocr-action{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 0 0}
+.ocr-action .form-hint{margin:0;flex:1;min-width:180px}
+.ocr-action .button{flex:none}
+#subject-material-list .document-record{min-width:0}
+#subject-material-list .document-info{min-width:0;overflow-wrap:anywhere}
+#subject-material-list .document-info p{overflow-wrap:anywhere}
+html[data-theme="dark"] .ocr-action .form-hint{color:#BFC0D8}
+@media(max-width:620px){.practice-meta{display:grid;grid-template-columns:1fr}.ocr-action{align-items:stretch}.ocr-action .button{width:100%}}
