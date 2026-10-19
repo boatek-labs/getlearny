@@ -126,7 +126,7 @@ app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
   let lesson=null;
   let lastStatus=0;
   const configured=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)];
-  const models=[...configured,'google/gemma-4-31b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free','openrouter/free'].map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,4);
+  const models=[...configured,'google/gemma-4-31b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free','openrouter/free'].map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,3);
   for(let index=0;index<models.length;index++){
     const model=models[index];
     try{
@@ -137,7 +137,7 @@ app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
           {role:'system',content:'You are a careful Ghana SHS tutor preparing students for WASSCE. Teach prerequisite concepts first, use age-appropriate language, worked examples, common mistakes, and a short self-check. Do not fabricate official syllabus claims.'},
           {role:'user',content:`Create a useful lesson in Markdown. Subject: ${subject}. Topic: ${topic}. Level: ${level}. Exam: ${exam}. Include goals, prerequisite check, explanation, worked example, common mistakes, exam tip, and 3 self-check questions with answers at the end.`}
         ],temperature:0.4,max_tokens:1500}),
-        signal:AbortSignal.timeout(index===0?8000:6500)
+        signal:AbortSignal.timeout(index===0?5000:4500)
       });
       lastStatus=response.status;
       if(!response.ok){console.warn('OpenRouter lesson model failed:',model,'HTTP',response.status);continue;}
@@ -201,5 +201,5 @@ app.post('/api/v1/documents/:id/ask',auth,asyncRoute(async(req,res)=>{
 
 app.get('/api/v1/documents',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at FROM uploaded_documents WHERE user_id=$1 ORDER BY subject_name,created_at DESC LIMIT 100',[req.user.sub]);res.json({documents:r.rows})}));
 app.get('/api/v1/documents/:id',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT original_name,mime_type,content FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);if(!r.rowCount)return fail(res,404,'Document not found');res.setHeader('Content-Type',r.rows[0].mime_type);res.setHeader('Content-Disposition','attachment; filename="study-material"');res.send(r.rows[0].content)}));
-app.use((err,_req,res,_next)=>{if(err instanceof multer.MulterError)return fail(res,err.code==='LIMIT_FILE_SIZE'?413:400,err.code==='LIMIT_FILE_SIZE'?'File is too large':'Upload failed');if(err.message==='Origin not allowed by CORS')return fail(res,403,err.message);console.error(err);return fail(res,500,process.env.NODE_ENV==='production'?'Unexpected server error':err.message||'Unexpected server error')});
+app.use((err,_req,res,_next)=>{if(err instanceof multer.MulterError)return fail(res,err.code==='LIMIT_FILE_SIZE'?413:400,err.code==='LIMIT_FILE_SIZE'?'File is too large':'Upload failed');if(err.message==='Origin not allowed by CORS')return fail(res,403,err.message);if(typeof err.message==='string'&&err.message.startsWith('Supported study materials:'))return fail(res,415,err.message);if(typeof err.message==='string'&&err.message.startsWith('Profile pictures must be'))return fail(res,415,err.message);console.error(err);return fail(res,500,process.env.NODE_ENV==='production'?'Unexpected server error':err.message||'Unexpected server error')});
 export default app;
