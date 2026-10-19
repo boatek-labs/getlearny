@@ -175,7 +175,7 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
  const key=process.env.OPENROUTER_API_KEY;
  if(!key)return fail(res,503,'Gemini did not return a valid practice set, and OpenRouter is not configured. Check GEMINI_API_KEY and add OPENROUTER_API_KEY in the Vercel API environment.');
  const configured=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean),'google/gemma-3-27b-it:free','qwen/qwen3-30b-a3b:free','meta-llama/llama-3.3-70b-instruct:free','openrouter/free'];
- const models=configured.map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,2);
+ const models=configured.map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,3);
  let lastStatus=0,attempted=[];
  for(const model of models){
   // Try JSON mode first, then a plain JSON-only prompt for providers that reject JSON mode.
@@ -185,10 +185,10 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
      method:'POST',
      headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny'},
      body:JSON.stringify({model,temperature:0.2,max_tokens:5200,...(jsonMode?{response_format:{type:'json_object'}}:{}),messages:[{role:'system',content:system},{role:'user',content:prompt}]}),
-     signal:AbortSignal.timeout(3500)
+     signal:AbortSignal.timeout(2500)
     });
     lastStatus=response.status;
-    if(!response.ok){console.warn('OpenRouter practice generation failed for',model,'HTTP',response.status);if(response.status===401||response.status===402)break;continue;}
+    if(!response.ok){console.warn('OpenRouter practice generation failed for',model,'HTTP',response.status);if(response.status===401||response.status===402||response.status===429)break;if(jsonMode&&response.status!==400)break;continue;}
     const data=await response.json();
     const message=data.choices?.[0]?.message;
     const content=typeof message?.content==='string'?message.content:Array.isArray(message?.content)?message.content.map(part=>part?.text||'').join('\n'):'';
