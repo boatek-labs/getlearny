@@ -87,7 +87,7 @@ class ApiClient {
     request.headers['Authorization']='Bearer $token';
     request.fields.addAll(fields);
     request.files.add(http.MultipartFile.fromBytes('file',file.bytes!,filename:file.name));
-    final streamed=await request.send().timeout(const Duration(seconds:30));
+    final streamed=await request.send().timeout(const Duration(seconds:90));
     final response=await http.Response.fromStream(streamed);
     final decoded=response.body.isEmpty?<String,dynamic>{}:jsonDecode(response.body) as Map<String,dynamic>;
     if(response.statusCode<200||response.statusCode>=300)throw Exception(decoded['error']??'Upload failed');
