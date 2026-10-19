@@ -76,15 +76,16 @@ class ApiClient {
       ? http.post(uri, headers: _headers(), body: jsonEncode(body ?? {}))
       : method == 'PATCH'
         ? http.patch(uri, headers: _headers(), body: jsonEncode(body ?? {}))
-        : http.get(uri, headers: _headers())).timeout(const Duration(seconds: 20));
+        : http.get(uri, headers: _headers())).timeout(const Duration(seconds: 45));
     final decoded = response.body.isEmpty ? <String,dynamic>{} : jsonDecode(response.body) as Map<String,dynamic>;
     if (response.statusCode < 200 || response.statusCode >= 300) throw Exception(decoded['error'] ?? 'Request failed');
     return decoded;
   }
-  static Future<Map<String,dynamic>> upload(String path, PlatformFile file) async {
+  static Future<Map<String,dynamic>> upload(String path, PlatformFile file, {Map<String,String> fields=const {}}) async {
     if(token==null)throw Exception('Sign in first');
     final request=http.MultipartRequest('POST',Uri.parse('$apiBase$path'));
     request.headers['Authorization']='Bearer $token';
+    request.fields.addAll(fields);
     request.files.add(http.MultipartFile.fromBytes('file',file.bytes!,filename:file.name));
     final streamed=await request.send().timeout(const Duration(seconds:30));
     final response=await http.Response.fromStream(streamed);
@@ -164,7 +165,7 @@ class TopicListPage extends StatefulWidget {
  @override State<TopicListPage> createState()=>_TopicListPageState();
 }
 class _TopicListPageState extends State<TopicListPage>{
- bool loading=false,downloading=false; String error=''; List<Map<String,dynamic>> topics=[];
+ bool loading=false,downloading=false,uploadingMaterial=false; String error=''; List<Map<String,dynamic>> topics=[];
  String get code=>({'Mathematics':'MATH','Core Mathematics':'MATH','English':'ENG','English Language':'ENG','Chemistry':'SCI','Biology':'SCI','Integrated Science':'SCI','Social Studies':'SOC','Add Math':'EMATH','Additional Mathematics':'EMATH','Elective Mathematics':'EMATH','Computer Science':'ICT','ICT':'ICT'}[widget.subject]??widget.subject.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9_-]'),''));
  @override void initState(){super.initState();_loadTopics();}
  Future<void> _loadTopics()async{
@@ -173,6 +174,23 @@ class _TopicListPageState extends State<TopicListPage>{
   try{final result=await ApiClient.request('/topics?subject=$code&limit=100');final rows=(result['topics'] as List? ?? []);if(!mounted)return;setState(()=>topics=rows.map((e)=>Map<String,dynamic>.from(e as Map)).toList());}
   catch(e){if(mounted)setState(()=>error='Live topic catalogue unavailable. Downloaded lessons remain available offline.');}
   finally{if(mounted)setState(()=>loading=false);}
+ }
+ Future<void> _uploadSubjectMaterial() async {
+  if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in before uploading study materials.')));return;}
+  try{
+   final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:const ['pdf','txt','md','markdown','csv','json','png','jpg','jpeg','webp'],withData:true);
+   if(picked==null)return;
+   final file=picked.files.single;
+   if(file.bytes==null)throw Exception('Could not read this file. Please choose it again.');
+   if(file.size>12*1024*1024)throw Exception('Choose a file smaller than 12 MB.');
+   if(!mounted)return;setState(()=>uploadingMaterial=true);
+   final result=await ApiClient.upload('/documents',file,fields:{'subject_name':widget.subject,'material_title':file.name});
+   final document=Map<String,dynamic>.from(result['document'] as Map? ?? {});
+   final status=document['processing_status']?.toString()??'uploaded';
+   final message=result['message']?.toString()??(status=='ready'?'Material saved and text extracted.':'Material uploaded.');
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('$message Open Profile → Study materials to view it.')));
+  }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Upload failed: ${e.toString().replaceFirst('Exception: ','')}')));}
+  finally{if(mounted)setState(()=>uploadingMaterial=false);}
  }
  Future<void> _downloadThree()async{
   if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in before downloading lessons.')));return;}
@@ -196,6 +214,8 @@ class _TopicListPageState extends State<TopicListPage>{
   FilledButton.icon(onPressed:loading||downloading?null:_downloadThree,icon:downloading?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.download_for_offline_outlined),label:Text(downloading?'Downloading lessons…':'Download next 3 lessons · keep offline 7 days')),
   const SizedBox(height:12),
   OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>OfflineLessonsPage(subject:widget.subject))),icon:const Icon(Icons.library_books_outlined),label:const Text('Open saved lessons')),
+  const SizedBox(height:8),
+  OutlinedButton.icon(onPressed:uploadingMaterial?null:_uploadSubjectMaterial,icon:uploadingMaterial?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.upload_file_outlined),label:Text(uploadingMaterial?'Uploading and processing…':'Upload subject material · OCR')),
   const SizedBox(height:16),
   if(loading)const Center(child:Padding(padding:EdgeInsets.all(28),child:CircularProgressIndicator())),
   if(error.isNotEmpty)...[Text(error,style:const TextStyle(color:Colors.deepOrange)),TextButton.icon(onPressed:_loadTopics,icon:const Icon(Icons.refresh),label:const Text('Retry'))],
