@@ -64,7 +64,7 @@
     try {
       await api('/learning-logs',{method:'POST',body:JSON.stringify({
         subject:session.subject,topic:session.topic,minutes_spent:minutes,
-        status:completed?'completed':'started',
+        status:completed?'review':'started',
         notes:'Focus studio session'+(completed?' completed':' ended early')+'. Timer duration: '+session.length+' minutes.'
       })});
       setStatus((completed?'Session complete! ':'Session saved. ')+minutes+' minute'+(minutes===1?'':'s')+' added to your learning record.');
