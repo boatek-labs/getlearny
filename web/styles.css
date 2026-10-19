@@ -306,3 +306,70 @@ html[data-theme="dark"] #connection{color:#E7E7F5}
 html[data-theme="dark"] .icon-button{background:#202137;border-color:#373852;color:#E7E7F5}
 html[data-theme="dark"] .icon-button:hover{background:#292A43}
 html[data-theme="dark"] .status-dot{background:#9BE7FF;box-shadow:0 0 0 3px rgba(155,231,255,.12)}
+
+
+/* Mobile navigation refresh: a proper slide-in drawer keeps every label reachable on phones. */
+.mobile-menu-toggle{display:none;align-items:center;justify-content:center;flex-direction:column;gap:4px;width:42px;height:42px;flex:0 0 42px;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--white);color:var(--ink);cursor:pointer}
+.mobile-menu-toggle span{display:block;width:18px;height:2px;border-radius:2px;background:currentColor;transition:transform .18s,opacity .18s}
+.mobile-nav-backdrop{display:none}
+@media(max-width:760px){
+ .mobile-menu-toggle{display:flex}
+ .topbar{justify-content:flex-start;gap:12px;height:66px;margin-bottom:22px}
+ .breadcrumb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+ .top-actions{gap:5px;flex-shrink:0}
+ .top-actions .icon-button{width:35px;height:35px;margin-left:0;border-radius:10px}
+ .sidebar{width:min(300px,86vw);padding:22px 17px 18px;transform:translateX(-105%);transition:transform .22s ease;z-index:21;box-shadow:16px 0 45px rgba(0,0,0,.22);visibility:hidden}
+ .sidebar .brand{justify-content:flex-start;padding:0 5px}
+ .sidebar .brand>span:last-child{display:block;font-size:19px}
+ .sidebar .side-label{display:block;font-size:10px;margin:28px 10px 12px}
+ .sidebar nav{margin-top:0;gap:5px}
+ .sidebar .nav-item,.sidebar .nav-item.active{justify-content:flex-start;gap:13px;padding:13px;border-radius:12px;font-size:13px;min-height:46px}
+ .sidebar .nav-item span{font-size:19px;flex:0 0 22px}
+ .sidebar .side-bottom{margin-top:auto}
+ .sidebar .exam-card{display:block;padding:14px}
+ .sidebar .profile-link{justify-content:flex-start;gap:10px;padding:12px;background:linear-gradient(135deg,#242044,#171A35);border:1px solid #373458;border-radius:13px}
+ .sidebar .profile-link>span:not(.avatar){display:block}
+ .sidebar .profile-link .account-label{min-width:0;overflow-wrap:anywhere}
+ .sidebar .account-logout{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:10px;background:#24213D;border:1px solid #373458;color:#F4F3FF}
+ .mobile-nav-backdrop{position:fixed;inset:0;background:rgba(5,7,20,.56);backdrop-filter:blur(2px);z-index:20;opacity:0;pointer-events:none;transition:opacity .2s}
+ body.mobile-nav-open .sidebar{transform:translateX(0);visibility:visible}
+ body.mobile-nav-open .mobile-nav-backdrop{display:block;opacity:1;pointer-events:auto}
+ body.mobile-nav-open .mobile-menu-toggle span:first-child{transform:translateY(6px) rotate(45deg)}
+ body.mobile-nav-open .mobile-menu-toggle span:nth-child(2){opacity:0}
+ body.mobile-nav-open .mobile-menu-toggle span:last-child{transform:translateY(-6px) rotate(-45deg)}
+ .main{margin-left:0;padding:0 17px}
+ .view{min-width:0}
+ .hero{min-height:270px;padding:23px 20px;border-radius:20px}
+ .hero-copy{width:100%;max-width:310px}
+ .hero h2{font-size:clamp(27px,7vw,33px)}
+ .hero-art{left:44%;opacity:.3}
+ .section-heading{align-items:flex-start}
+ .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .subject-grid{grid-template-columns:1fr}
+ .subject-card{min-width:0}
+ .subject-workspace{padding:16px;border-radius:18px}
+ .subject-tool-grid{grid-template-columns:1fr}
+ .subject-tool{display:grid;grid-template-columns:40px minmax(0,1fr);align-items:center;column-gap:10px}
+ .subject-tool>span{grid-row:span 2}
+ .practice-builder,.practice-card,.form-card,.lesson-panel{padding:16px;border-radius:16px}
+ .practice-form-grid{grid-template-columns:1fr}
+ .practice-form-grid label:nth-child(3){grid-column:auto}
+ .practice-meta{display:grid;grid-template-columns:1fr}
+ .practice-generate-button{width:100%;justify-content:space-between}
+ .two-col{grid-template-columns:1fr}
+ footer{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+}
+@media(max-width:420px){
+ .main{padding:0 12px}
+ .topbar{gap:8px}
+ .breadcrumb{font-size:11px}
+ .top-actions .icon-button{width:32px;height:32px}
+ #account-button{display:none}
+ .hero{padding:20px 16px}
+ .hero-art{left:35%;opacity:.22}
+ .stats-grid{gap:8px}
+ .stat-card{padding:11px}
+ .stat-card>b{font-size:20px}
+ .lesson-actions .button{flex:1}
+ .subject-workspace-head{gap:10px}
+}
