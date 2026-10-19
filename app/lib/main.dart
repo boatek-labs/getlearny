@@ -246,7 +246,7 @@ class _LessonPageState extends State<LessonPage>{bool busy=false;String? lesson;
 
 class PracticePage extends StatefulWidget {const PracticePage({super.key});@override State<PracticePage> createState()=>_PracticePageState();}
 class _PracticePageState extends State<PracticePage>{
- final topicController=TextEditingController();String subject='Mathematics';int count=10;bool loading=false,grading=false,finished=false;int secondsLeft=0,score=0,currentIndex=0;Timer? timer;String feedback='';List<Map<String,dynamic>> questions=[];List<int?> answers=[];
+ final topicController=TextEditingController();String subject='Core Mathematics';int count=10;bool loading=false,grading=false,finished=false;int secondsLeft=0,score=0,currentIndex=0;Timer? timer;String feedback='';List<Map<String,dynamic>> questions=[];List<int?> answers=[];
  static const subjects=['Core Mathematics','English Language','Chemistry','Biology','Social Studies','Additional Mathematics','Computer Science'];
  @override void dispose(){timer?.cancel();topicController.dispose();super.dispose();}
  Future<void> generate()async{
