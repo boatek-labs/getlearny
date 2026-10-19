@@ -126,7 +126,7 @@ app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
   let lesson=null;
   let lastStatus=0;
   const configured=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)];
-  const models=[...configured,'google/gemma-4-31b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free','openrouter/free'].filter((x,i,a)=>a.indexOf(x)===i).slice(0,2);
+  const models=[...configured,'google/gemma-4-31b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free','openrouter/free'].map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,4);
   for(let index=0;index<models.length;index++){
     const model=models[index];
     try{
@@ -137,7 +137,7 @@ app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
           {role:'system',content:'You are a careful Ghana SHS tutor preparing students for WASSCE. Teach prerequisite concepts first, use age-appropriate language, worked examples, common mistakes, and a short self-check. Do not fabricate official syllabus claims.'},
           {role:'user',content:`Create a useful lesson in Markdown. Subject: ${subject}. Topic: ${topic}. Level: ${level}. Exam: ${exam}. Include goals, prerequisite check, explanation, worked example, common mistakes, exam tip, and 3 self-check questions with answers at the end.`}
         ],temperature:0.4,max_tokens:1500}),
-        signal:AbortSignal.timeout(index===0?14000:9000)
+        signal:AbortSignal.timeout(index===0?8000:6500)
       });
       lastStatus=response.status;
       if(!response.ok){console.warn('OpenRouter lesson model failed:',model,'HTTP',response.status);continue;}
