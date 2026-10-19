@@ -22,12 +22,46 @@
       <div class="focus-bottom"><div class="focus-clock" id="focus-clock" aria-live="polite">25:00</div><div class="focus-buttons"><button class="button button-primary" id="focus-start">Start focus</button><button class="button button-light" id="focus-pause" disabled>Pause</button><button class="button button-light" id="focus-finish" disabled>Finish & save</button></div></div>
       <p class="focus-status" id="focus-status" role="status">Choose a topic, then start. Your session is saved only when you finish it.</p>`;
     stats.insertAdjacentElement('afterend', card);
+    const goal = document.createElement('section');
+    goal.id = 'weekly-goal';
+    goal.className = 'weekly-goal';
+    goal.innerHTML = `
+      <div class="weekly-goal-heading"><div><span class="focus-kicker">YOUR WEEK, YOUR PACE</span><h2>Weekly study goal</h2><p>Progress is calculated from your saved learning records for the last 7 days.</p></div>
+      <label>Weekly target<select id="weekly-goal-target"><option value="120">2 hours</option><option value="180" selected>3 hours</option><option value="300">5 hours</option><option value="420">7 hours</option></select></label></div>
+      <div class="weekly-progress-track"><div id="weekly-progress-fill" class="weekly-progress-fill" style="width:0%"></div></div>
+      <div class="weekly-progress-caption"><b id="weekly-progress-total">Sign in to load your saved study time</b><span id="weekly-progress-percent">—</span></div>
+      <p id="weekly-progress-status" class="focus-status" role="status">Your progress will appear here when your account records are available.</p>`;
+    card.insertAdjacentElement('afterend', goal);
+    const target = $('#weekly-goal-target');
+    try { const key=goalStorageKey(); const saved=localStorage.getItem(key); if(saved && ['120','180','300','420'].includes(saved)) target.value=saved; } catch {}
+    target.addEventListener('change', () => { try { localStorage.setItem(goalStorageKey(),target.value); } catch {} refreshGoal(); });
+    refreshGoal();
     $('#focus-length', card).addEventListener('change', () => { if (!session) $('#focus-clock').textContent = format(Number($('#focus-length').value)*60); });
     $('#focus-start', card).addEventListener('click', start);
     $('#focus-pause', card).addEventListener('click', togglePause);
     $('#focus-finish', card).addEventListener('click', finish);
   }
 
+  function goalStorageKey() { return 'getlearny_weekly_goal_'+((typeof state!=='undefined' && state.user && state.user.id) ? state.user.id : 'account'); }
+  async function refreshGoal() {
+    const totalEl=$('#weekly-progress-total'), percentEl=$('#weekly-progress-percent'), fill=$('#weekly-progress-fill'), status=$('#weekly-progress-status'), target=$('#weekly-goal-target');
+    if (!totalEl || !percentEl || !fill || !status || !target) return;
+    if (!(typeof state!=='undefined' && state.token)) { totalEl.textContent='Sign in to load your saved study time'; percentEl.textContent='—'; fill.style.width='0%'; status.textContent='Weekly progress uses your real learning records and becomes available after sign-in.'; return; }
+    totalEl.textContent='Loading saved study time…'; status.textContent='Checking your learning records…';
+    try {
+      const result=await api('/learning-logs');
+      const cutoff=Date.now()-7*24*60*60*1000;
+      const logs=Array.isArray(result.logs)?result.logs:[];
+      const minutes=logs.reduce((sum,log)=>{const date=Date.parse(log.created_at||'');return Number.isFinite(date)&&date>=cutoff?sum+Math.max(0,Number(log.minutes_spent)||0):sum;},0);
+      const goalMinutes=Number(target.value)||180, percent=Math.min(100,Math.round(minutes/goalMinutes*100));
+      totalEl.textContent=Math.floor(minutes/60)+'h '+(minutes%60)+'m of '+Math.floor(goalMinutes/60)+'h '+(goalMinutes%60?goalMinutes%60+'m':'');
+      percentEl.textContent=percent+'%'; fill.style.width=percent+'%';
+      status.textContent=minutes>=goalMinutes?'Weekly goal reached. Great work keeping a steady rhythm.':(goalMinutes-minutes)+' more minutes to reach this week’s target.';
+    } catch(error) {
+      totalEl.textContent='Study time unavailable'; percentEl.textContent='—'; fill.style.width='0%';
+      status.textContent='Could not load your saved study records: '+(error?.message||'Connection error');
+    }
+  }
   function setStatus(message) { const el=$('#focus-status'); if(el) el.textContent=message; }
   function updateClock() {
     const length = session ? session.length*60 : Number($('#focus-length')?.value || 25)*60;
@@ -69,6 +103,7 @@
       })});
       setStatus((completed?'Session complete! ':'Session saved. ')+minutes+' minute'+(minutes===1?'':'s')+' added to your learning record.');
       if (typeof loadDashboard==='function') loadDashboard();
+      refreshGoal();
     } catch (error) {
       setStatus('Could not save this session: '+(error?.message||'Connection error')+'. Your session is kept here; reconnect and tap Finish & save to retry.');
       $('#focus-finish').disabled=false;
