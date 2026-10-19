@@ -255,9 +255,9 @@ class _PracticePageState extends State<PracticePage>{
  }
  void startTimer(){timer?.cancel();timer=Timer.periodic(const Duration(seconds:1),(t){if(!mounted)return;if(secondsLeft<=1){setState(()=>secondsLeft=0);t.cancel();grade(expired:true);}else setState(()=>secondsLeft--);});}
  Future<void> grade({bool expired=false})async{
-  if(finished||questions.isEmpty)return;timer?.cancel();setState(()=>{grading=true;gradingFailed=false;gradeError='';});
+  if(finished||questions.isEmpty)return;timer?.cancel();setState((){grading=true;gradingFailed=false;gradeError='';});
   try{final r=await ApiClient.request('/practice/grade',method:'POST',body:{'subject':subject,'questions':questions.map((q)=>{'question':q['question'],'options':q['options'],'answer':q['answer'],'explanation':q['explanation']??''}).toList(),'answers':answers});score=(r['score'] as num? ?? 0).toInt();feedback=r['feedback']?.toString()??'';try{await ApiClient.request('/tests',method:'POST',body:{'subject':subject,'title':'Timed AI practice','score':score,'max_score':questions.length});}catch(_){}}
-  catch(e){if(mounted)setState(()=>{gradingFailed=true;gradeError=e.toString().replaceFirst('Exception: ','');});}
+  catch(e){if(mounted)setState((){gradingFailed=true;gradeError=e.toString().replaceFirst('Exception: ','');});}
   finally{if(mounted)setState(()=>grading=false);}
   if(mounted&&!gradingFailed)setState(()=>finished=true);
  }
