@@ -172,6 +172,21 @@ app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res
  const messages={needs_ocr:'This PDF has no selectable text. AI OCR was unavailable for this file; try a smaller scanned PDF or upload clear page images.',ocr_failed:'OCR could not read this image. Try a clearer, well-lit image.',ready:'Study material saved and text extracted. The AI tutor can now use it.',uploaded:'File saved, but no readable text was found.'};
  res.status(201).json({document:r.rows[0],message:messages[processingStatus]||messages.uploaded});
 }));
+
+app.post('/api/v1/documents/:id/ocr',auth,asyncRoute(async(req,res)=>{
+ const found=await query('SELECT id,original_name,mime_type,content FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);
+ if(!found.rows.length)return fail(res,404,'Study material not found');
+ const doc=found.rows[0],buffer=doc.content;if(!buffer)return fail(res,422,'Original file unavailable. Upload it again.');
+ let extractedText='';
+ if(OCR_IMAGE_MIMES.has(doc.mime_type)){let worker;try{worker=await createWorker('eng');const result=await worker.recognize(buffer);extractedText=String(result.data?.text||'').trim().slice(0,150000);}catch(error){console.error('Stored image OCR failed:',error.message);return fail(res,502,'OCR could not read this image. Try a clearer image.')}finally{if(worker)await worker.terminate().catch(()=>{})}}
+ else if(doc.mime_type==='application/pdf'){
+  try{const parsed=await pdfParse(buffer);extractedText=String(parsed.text||'').trim().slice(0,150000)}catch{}
+  if(!extractedText&&buffer.length<=6*1024*1024&&process.env.OPENROUTER_API_KEY){const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,3);for(const model of models){try{const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+process.env.OPENROUTER_API_KEY,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny OCR'},body:JSON.stringify({model,temperature:0,max_tokens:6000,messages:[{role:'system',content:'Transcribe all visible text from the study PDF faithfully. Preserve headings, formulas and numbering. Do not summarize or invent text. Return only transcription.'},{role:'user',content:[{type:'text',text:'OCR this scanned study PDF.'},{type:'file',file:{filename:path.basename(doc.original_name||'study-material.pdf'),file_data:'data:application/pdf;base64,'+buffer.toString('base64')}}]}]}),signal:AbortSignal.timeout(18000)});if(!response.ok)continue;const data=await response.json(),content=data.choices?.[0]?.message?.content;if(typeof content==='string'&&content.trim()){extractedText=content.trim().slice(0,150000);break}}catch(error){console.warn('Stored PDF OCR attempt failed:',error.message)}}}
+ }else return fail(res,415,'OCR is available for scanned PDFs and PNG, JPG or WebP images');
+ if(!extractedText)return fail(res,422,'OCR found no readable text. Try a clearer scan or upload page images.');
+ const updated=await query('UPDATE uploaded_documents SET extracted_text=$1,processing_status=$2 WHERE id=$3 AND user_id=$4 RETURNING id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at',[extractedText,'ready',doc.id,req.user.sub]);
+ res.json({document:updated.rows[0],message:'OCR complete. The AI tutor can now use this material.',characters:extractedText.length});
+}));
 app.post('/api/v1/documents/:id/ask',auth,asyncRoute(async(req,res)=>{
  const parsed=z.object({question:z.string().trim().min(3).max(1000)}).safeParse(req.body);
  if(!parsed.success)return fail(res,400,'Enter a question of 3 to 1000 characters');
