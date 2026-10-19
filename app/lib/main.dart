@@ -190,7 +190,7 @@ class _TopicListPageState extends State<TopicListPage>{
    final document=Map<String,dynamic>.from(result['document'] as Map? ?? {});
    final status=document['processing_status']?.toString()??'uploaded';
    final message=result['message']?.toString()??(status=='ready'?'Material saved and text extracted.':'Material uploaded.');
-   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('$message Open Profile → Study materials to view it.')));
+   if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('$message Open Files to view it.')));
   }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Upload failed: ${e.toString().replaceFirst('Exception: ','')}')));}
   finally{if(mounted)setState(()=>uploadingMaterial=false);}
  }
