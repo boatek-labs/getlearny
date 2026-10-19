@@ -65,7 +65,5 @@
   }
   window.renderRevisionInsights=renderRevisionInsights;
   document.addEventListener('DOMContentLoaded',renderRevisionInsights);
-  const observer=new MutationObserver(()=>{if($('#view-home.active'))renderRevisionInsights()});
-  observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
   if(document.readyState!=='loading')renderRevisionInsights();
 })();
