@@ -28,7 +28,7 @@ app.use(express.json({limit:'1mb'})); app.use(morgan(process.env.NODE_ENV==='pro
 app.use('/api/v1/auth',rateLimit({windowMs:15*60*1000,limit:30,standardHeaders:true,legacyHeaders:false}));
 app.use('/api/v1',rateLimit({windowMs:60*1000,limit:120,standardHeaders:true,legacyHeaders:false}));
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
-async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false}){
+async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false,timeoutMs=15000}){
  const apiKey=process.env.GEMINI_API_KEY;
  if(!apiKey)return null;
  const model=process.env.GEMINI_MODEL||'gemini-3.8-flash';
@@ -41,7 +41,7 @@ async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=
     contents:[{role:'user',parts:[{text:user}]}],
     generationConfig:{temperature,maxOutputTokens,...(json?{responseMimeType:'application/json'}:{})}
    }),
-   signal:AbortSignal.timeout(15000)
+   signal:AbortSignal.timeout(timeoutMs)
   });
   if(!response.ok){console.warn('Gemini fallback failed: HTTP',response.status);return null;}
   const data=await response.json();
@@ -169,13 +169,13 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
   return questions.length===count?questions:null;
  }
  // Gemini is the primary provider. If its output is malformed, try OpenRouter models in order.
- const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:5200,json:true,temperature:0.2});
+ const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:5200,json:true,temperature:0.2,timeoutMs:9000});
  const geminiQuestions=parseQuestions(geminiText);
  if(geminiQuestions)return res.json({questions:geminiQuestions,generatedBy:'gemini',subject,model:process.env.GEMINI_MODEL||'gemini-3.8-flash'});
  const key=process.env.OPENROUTER_API_KEY;
  if(!key)return fail(res,503,'Gemini did not return a valid practice set, and OpenRouter is not configured. Check GEMINI_API_KEY and add OPENROUTER_API_KEY in the Vercel API environment.');
  const configured=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean),'google/gemma-3-27b-it:free','qwen/qwen3-30b-a3b:free','meta-llama/llama-3.3-70b-instruct:free','openrouter/free'];
- const models=configured.map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,4);
+ const models=configured.map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,2);
  let lastStatus=0,attempted=[];
  for(const model of models){
   // Try JSON mode first, then a plain JSON-only prompt for providers that reject JSON mode.
@@ -185,7 +185,7 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
      method:'POST',
      headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny'},
      body:JSON.stringify({model,temperature:0.2,max_tokens:5200,...(jsonMode?{response_format:{type:'json_object'}}:{}),messages:[{role:'system',content:system},{role:'user',content:prompt}]}),
-     signal:AbortSignal.timeout(5200)
+     signal:AbortSignal.timeout(3500)
     });
     lastStatus=response.status;
     if(!response.ok){console.warn('OpenRouter practice generation failed for',model,'HTTP',response.status);if(response.status===401||response.status===402)break;continue;}
