@@ -192,6 +192,7 @@ class _TopicListPageState extends State<TopicListPage>{
   }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Upload failed: ${e.toString().replaceFirst('Exception: ','')}')));}
   finally{if(mounted)setState(()=>uploadingMaterial=false);}
  }
+
  Future<void> _downloadThree()async{
   if(ApiClient.token==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Sign in before downloading lessons.')));return;}
   if(topics.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No live topics are available to download yet. Connect and retry.')));return;}
