@@ -28,6 +28,27 @@ app.use(express.json({limit:'1mb'})); app.use(morgan(process.env.NODE_ENV==='pro
 app.use('/api/v1/auth',rateLimit({windowMs:15*60*1000,limit:30,standardHeaders:true,legacyHeaders:false}));
 app.use('/api/v1',rateLimit({windowMs:60*1000,limit:120,standardHeaders:true,legacyHeaders:false}));
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
+async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false}){
+ const apiKey=process.env.GEMINI_API_KEY;
+ if(!apiKey)return null;
+ const model=process.env.GEMINI_MODEL||'gemini-3.8-flash';
+ try{
+  const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
+   method:'POST',
+   headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
+   body:JSON.stringify({
+    systemInstruction:{parts:[{text:system}]},
+    contents:[{role:'user',parts:[{text:user}]}],
+    generationConfig:{temperature,maxOutputTokens,...(json?{responseMimeType:'application/json'}:{})}
+   }),
+   signal:AbortSignal.timeout(15000)
+  });
+  if(!response.ok){console.warn('Gemini fallback failed: HTTP',response.status);return null;}
+  const data=await response.json();
+  const text=(data.candidates?.[0]?.content?.parts||[]).map(part=>part.text||'').join('').trim();
+  return text||null;
+ }catch(error){console.warn('Gemini fallback request failed:',error?.name||'request error');return null;}
+}
 const fail=(res,status,error)=>res.status(status).json({error});
 const envReady=()=>Boolean(process.env.JWT_SECRET&&process.env.JWT_SECRET.length>=32);
 const pushReady=()=>Boolean(process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT);
@@ -109,46 +130,52 @@ app.post('/api/v1/practice/grade',auth,asyncRoute(async(req,res)=>{
 app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
  const parsed=z.object({subject:z.string().trim().min(1).max(100),topic:z.string().trim().max(200).optional().default(''),level:z.string().max(100).optional().default('Not specified'),count:z.number().int().min(5).max(15).default(10)}).safeParse(req.body);
  if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
- const {subject,topic,level,count}=parsed.data;const key=process.env.OPENROUTER_API_KEY;
- if(!key)return fail(res,503,'AI practice is not configured. Add OPENROUTER_API_KEY to the API deployment environment.');
- const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,3);let lastStatus=0;
- for(const model of models){try{const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny'},body:JSON.stringify({model,temperature:0.4,max_tokens:3600,response_format:{type:'json_object'},messages:[{role:'system',content:'Create accurate age-appropriate multiple choice practice for a Ghanaian secondary student. Return only JSON object with key questions, an array of exactly requested count. Each item has question string, options array of exactly 4 strings, answer integer 0-3, explanation string, topic string. Exactly one correct answer per question. No markdown.'},{role:'user',content:'Create '+count+' original questions. Subject: '+subject+'; class level: '+level+'; topic: '+(topic||'balanced core concepts')+'. Follow the schema exactly.'}]}),signal:AbortSignal.timeout(models.length===1?12000:8000)});lastStatus=response.status;if(!response.ok)continue;const data=await response.json();let content=data.choices?.[0]?.message?.content;if(typeof content!=='string')continue;content=content.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');const decoded=JSON.parse(content),qs=decoded.questions;if(!Array.isArray(qs)||qs.length!==count)continue;const valid=qs.every(q=>typeof q.question==='string'&&q.question.trim()&&Array.isArray(q.options)&&q.options.length===4&&q.options.every(o=>typeof o==='string'&&o.trim())&&Number.isInteger(q.answer)&&q.answer>=0&&q.answer<4&&typeof q.explanation==='string'&&q.explanation.trim());if(!valid)continue;return res.json({questions:qs,generatedBy:'openrouter',subject,model})}catch{}}
- return fail(res,502,lastStatus===401?'OpenRouter rejected the API key. Verify the key in the API deployment environment.':lastStatus===402?'OpenRouter reports insufficient credits or a payment limit.':lastStatus===429?'OpenRouter rate limit reached. Try again shortly.':'OpenRouter could not generate a valid practice set. Check the model and API key, then retry.');
+ const {subject,topic,level,count}=parsed.data;
+ const system='Create accurate age-appropriate multiple choice practice for a Ghanaian secondary student. Return only JSON object with key questions, an array of exactly requested count. Each item has question string, options array of exactly 4 strings, answer integer 0-3, explanation string, topic string. Exactly one correct answer per question. No markdown.';
+ const prompt='Create '+count+' original questions. Subject: '+subject+'; class level: '+level+'; topic: '+(topic||'balanced core concepts')+'. Follow the schema exactly.';
+ const validQuestions=qs=>Array.isArray(qs)&&qs.length===count&&qs.every(q=>typeof q.question==='string'&&q.question.trim()&&Array.isArray(q.options)&&q.options.length===4&&q.options.every(o=>typeof o==='string'&&o.trim())&&Number.isInteger(q.answer)&&q.answer>=0&&q.answer<4&&typeof q.explanation==='string'&&q.explanation.trim());
+ // Primary provider: Gemini. OpenRouter is used only if Gemini fails or returns invalid output.
+ const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:3600,json:true});
+ if(geminiText){try{const decoded=JSON.parse(geminiText.replace(/^\x60\x60\x60(?:json)?\s*/i,'').replace(/\s*\x60\x60\x60$/,''));if(validQuestions(decoded.questions))return res.json({questions:decoded.questions,generatedBy:'gemini',subject,model:process.env.GEMINI_MODEL||'gemini-3.8-flash'});}catch{console.warn('Gemini practice response was not valid JSON or did not match the requested schema.');}}
+ const key=process.env.OPENROUTER_API_KEY;
+ if(!key)return fail(res,503,'Gemini could not generate valid practice and OpenRouter is not configured. Add OPENROUTER_API_KEY to the API deployment environment.');
+ const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,3);
+ let lastStatus=0;
+ for(const model of models){try{
+  const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny'},body:JSON.stringify({model,temperature:0.4,max_tokens:3600,response_format:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:prompt}]}),signal:AbortSignal.timeout(8000)});
+  lastStatus=response.status;if(!response.ok)continue;
+  const data=await response.json();let content=data.choices?.[0]?.message?.content;if(typeof content!=='string')continue;
+  content=content.trim().replace(/^\x60\x60\x60(?:json)?\s*/i,'').replace(/\s*\x60\x60\x60$/,'');
+  const decoded=JSON.parse(content);if(!validQuestions(decoded.questions))continue;
+  return res.json({questions:decoded.questions,generatedBy:'openrouter',subject,model});
+ }catch{}}
+ return fail(res,502,lastStatus===401?'OpenRouter rejected its API key. Verify the key in the API deployment environment.':lastStatus===402?'OpenRouter reports insufficient credits or a payment limit.':lastStatus===429?'OpenRouter rate limit reached. Try again shortly.':'Gemini and OpenRouter could not generate a valid practice set. Check provider configuration and model availability, then retry.');
 }));
 const lessonInput=z.object({subject:z.string().trim().min(1).max(100),topic:z.string().trim().min(1).max(200),level:z.string().max(30).default('SHS 3'),exam:z.string().max(30).default('WASSCE')});
 app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
-  const parsed=lessonInput.safeParse(req.body);
-  if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
-  const {subject,topic,level,exam}=parsed.data;
-
-  const key=process.env.OPENROUTER_API_KEY;
-  if(!key)return fail(res,503,'AI lessons are not configured. Add OPENROUTER_API_KEY to the API deployment environment.');
-  let lesson=null;
-  let lastStatus=0;
-  const configured=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)];
-  const models=[...configured,'google/gemma-4-31b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free','openrouter/free'].map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,3);
-  for(let index=0;index<models.length;index++){
-    const model=models[index];
-    try{
-      const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{
-        method:'POST',
-        headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':process.env.OPENROUTER_APP_NAME||'GetLearny'},
-        body:JSON.stringify({model,messages:[
-          {role:'system',content:'You are a careful Ghana SHS tutor preparing students for WASSCE. Teach prerequisite concepts first, use age-appropriate language, worked examples, common mistakes, and a short self-check. Do not fabricate official syllabus claims.'},
-          {role:'user',content:`Create a useful lesson in Markdown. Subject: ${subject}. Topic: ${topic}. Level: ${level}. Exam: ${exam}. Include goals, prerequisite check, explanation, worked example, common mistakes, exam tip, and 3 self-check questions with answers at the end.`}
-        ],temperature:0.4,max_tokens:1500}),
-        signal:AbortSignal.timeout(index===0?5000:4500)
-      });
-      lastStatus=response.status;
-      if(!response.ok){console.warn('OpenRouter lesson model failed:',model,'HTTP',response.status);continue;}
-      const data=await response.json();
-      const generated=data.choices?.[0]?.message?.content;
-      if(typeof generated==='string'&&generated.trim()){lesson=generated;break;}
-      console.warn('OpenRouter lesson model returned empty content:',model);
-    }catch(error){console.warn('OpenRouter lesson request failed:',model,error?.name||'request error');}
-  }
-  if(!lesson)return fail(res,502,lastStatus===401?'OpenRouter rejected the API key. Check OPENROUTER_API_KEY in Vercel.':lastStatus===402?'OpenRouter reports a payment or credit limit.':lastStatus===429?'OpenRouter free-model rate limit reached. Try again shortly.':'AI lesson generation timed out or no free model returned a lesson. Check Vercel function logs and OpenRouter model availability, then retry.');
-  res.json({lesson,generatedBy:'openrouter',subject,topic});
+ const parsed=lessonInput.safeParse(req.body);
+ if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
+ const {subject,topic,level,exam}=parsed.data;
+ const system='You are a careful Ghana SHS tutor preparing students for WASSCE. Teach prerequisite concepts first, use age-appropriate language, worked examples, common mistakes, and a short self-check. Do not fabricate official syllabus claims.';
+ const prompt='Create a useful lesson in Markdown. Subject: '+subject+'. Topic: '+topic+'. Level: '+level+'. Exam: '+exam+'. Include goals, prerequisite check, explanation, worked example, common mistakes, exam tip, and 3 self-check questions with answers at the end.';
+ // Primary provider: Gemini. OpenRouter is used only if Gemini fails or returns empty output.
+ const lesson=await generateWithGemini({system,user:prompt,maxOutputTokens:2200});
+ if(lesson)return res.json({lesson,generatedBy:'gemini',model:process.env.GEMINI_MODEL||'gemini-3.8-flash',subject,topic});
+ const key=process.env.OPENROUTER_API_KEY;
+ if(!key)return fail(res,503,'Gemini could not generate a lesson and OpenRouter is not configured. Add OPENROUTER_API_KEY to the API deployment environment.');
+ let lastStatus=0;
+ const configured=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean),'google/gemma-4-31b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free','openrouter/free'];
+ const models=configured.map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,3);
+ for(let index=0;index<models.length;index++){
+  const model=models[index];
+  try{
+   const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':process.env.OPENROUTER_APP_NAME||'GetLearny'},body:JSON.stringify({model,messages:[{role:'system',content:system},{role:'user',content:prompt}],temperature:0.4,max_tokens:1500}),signal:AbortSignal.timeout(index===0?5000:4500)});
+   lastStatus=response.status;if(!response.ok){console.warn('OpenRouter lesson fallback failed:',model,'HTTP',response.status);continue;}
+   const data=await response.json(),generated=data.choices?.[0]?.message?.content;
+   if(typeof generated==='string'&&generated.trim())return res.json({lesson:generated.trim(),generatedBy:'openrouter',subject,topic,model});
+  }catch(error){console.warn('OpenRouter lesson fallback request failed:',model,error?.name||'request error');}
+ }
+ return fail(res,502,lastStatus===401?'OpenRouter rejected its API key. Check OPENROUTER_API_KEY in Vercel.':lastStatus===402?'OpenRouter reports a payment or credit limit.':lastStatus===429?'OpenRouter free-model rate limit reached.':'Gemini and OpenRouter could not generate a lesson. Check both provider configurations and model availability, then retry.');
 }));
 const TEXT_MATERIAL_EXTENSIONS=new Set(['.txt','.md','.markdown','.csv','.json']);
 const OCR_IMAGE_MIMES=new Set(['image/png','image/jpeg','image/webp']);
