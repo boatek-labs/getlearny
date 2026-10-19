@@ -30,7 +30,7 @@ app.use('/api/v1',rateLimit({windowMs:60*1000,limit:120,standardHeaders:true,leg
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
 async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false,timeoutMs=15000}){
  const apiKey=process.env.GEMINI_API_KEY;
- if(!apiKey)return null;
+ if(!apiKey){console.warn('Gemini is not configured: GEMINI_API_KEY is missing');return null;}
  const model=process.env.GEMINI_MODEL||'gemini-3.8-flash';
  try{
   const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
@@ -38,16 +38,22 @@ async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=
    headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
    body:JSON.stringify({
     systemInstruction:{parts:[{text:system}]},
-    contents:[{role:'user',parts:[{text:user}]}],
+    contents:[{role:'user',parts:Array.isArray(user)?user:[{text:user}]}],
     generationConfig:{temperature,maxOutputTokens,...(json?{responseMimeType:'application/json'}:{})}
    }),
    signal:AbortSignal.timeout(timeoutMs)
   });
-  if(!response.ok){console.warn('Gemini fallback failed: HTTP',response.status);return null;}
+  if(!response.ok){
+   let detail='';
+   try{const errorData=await response.json();detail=String(errorData.error?.message||'').slice(0,240)}catch{}
+   console.warn('Gemini request failed: HTTP',response.status,detail);
+   return null;
+  }
   const data=await response.json();
   const text=(data.candidates?.[0]?.content?.parts||[]).map(part=>part.text||'').join('').trim();
+  if(!text)console.warn('Gemini returned no text',data.promptFeedback?.blockReason||data.candidates?.[0]?.finishReason||'no finish reason');
   return text||null;
- }catch(error){console.warn('Gemini fallback request failed:',error?.name||'request error');return null;}
+ }catch(error){console.warn('Gemini request failed:',error?.name||'request error');return null;}
 }
 const fail=(res,status,error)=>res.status(status).json({error});
 const envReady=()=>Boolean(process.env.JWT_SECRET&&process.env.JWT_SECRET.length>=32);
@@ -124,7 +130,9 @@ app.post('/api/v1/practice/grade',auth,asyncRoute(async(req,res)=>{
  const {subject,questions,answers}=parsed.data;if(questions.length!==answers.length)return fail(res,400,'Answer count does not match the question count');
  const results=questions.map((q,i)=>({question:i+1,correct:answers[i]===q.answer,chosen:answers[i],answer:q.answer,explanation:q.explanation}));
  const score=results.filter(x=>x.correct).length;let feedback='Your answers have been checked against the correct options.';
- if(process.env.OPENROUTER_API_KEY){const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,2);const review=results.map((r,i)=>({question:questions[i].question,options:questions[i].options,student_answer:r.chosen===null?'Not answered':questions[i].options[r.chosen],correct_answer:questions[i].options[r.answer],correct:r.correct,explanation:r.explanation}));for(const model of models){try{const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+process.env.OPENROUTER_API_KEY,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny Exam Review'},body:JSON.stringify({model,temperature:0.2,max_tokens:850,messages:[{role:'system',content:'You are a supportive Ghana SHS tutor reviewing a completed timed multiple-choice practice. Give concise, useful feedback based only on the supplied results. Mention strengths or topics to revise, explain mistakes briefly, and suggest one next step. Do not change the objective score. Keep response under 120 words.'},{role:'user',content:JSON.stringify({subject,score,max_score:questions.length,answers:review})}]}),signal:AbortSignal.timeout(8500)});if(!response.ok)continue;const data=await response.json(),content=data.choices?.[0]?.message?.content;if(typeof content==='string'&&content.trim()){feedback=content.trim().slice(0,1400);break;}}catch{}}}
+ const review=results.map((r,i)=>({question:questions[i].question,options:questions[i].options,student_answer:r.chosen===null?'Not answered':questions[i].options[r.chosen],correct_answer:questions[i].options[r.answer],correct:r.correct,explanation:r.explanation}));
+ const generatedFeedback=await generateWithGemini({system:'You are a supportive Ghana SHS tutor reviewing a completed timed multiple-choice practice. Give concise, useful feedback based only on the supplied results. Mention strengths or topics to revise, explain mistakes briefly, and suggest one next step. Do not change the objective score. Keep response under 120 words.',user:JSON.stringify({subject,score,max_score:questions.length,answers:review}),temperature:0.2,maxOutputTokens:850,timeoutMs:9000});
+ if(generatedFeedback)feedback=generatedFeedback.slice(0,1400);
  res.json({score,max_score:questions.length,results,feedback,ai_review:feedback!=='Your answers have been checked against the correct options.'});
 }));
 app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
@@ -168,41 +176,12 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
   }
   return questions.length===count?questions:null;
  }
- // Gemini is the primary provider. If its output is malformed, try OpenRouter models in order.
- const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:5200,json:true,temperature:0.2,timeoutMs:9000});
+ const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:5200,json:true,temperature:0.2,timeoutMs:18000});
  const geminiQuestions=parseQuestions(geminiText);
  if(geminiQuestions)return res.json({questions:geminiQuestions,generatedBy:'gemini',subject,model:process.env.GEMINI_MODEL||'gemini-3.8-flash'});
- const key=process.env.OPENROUTER_API_KEY;
- if(!key)return fail(res,503,'Gemini did not return a valid practice set, and OpenRouter is not configured. Check GEMINI_API_KEY and add OPENROUTER_API_KEY in the Vercel API environment.');
- const configured=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean),'google/gemma-3-27b-it:free','qwen/qwen3-30b-a3b:free','meta-llama/llama-3.3-70b-instruct:free','openrouter/free'];
- const models=configured.map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,3);
- let lastStatus=0,attempted=[];
- for(const model of models){
-  // Try JSON mode first, then a plain JSON-only prompt for providers that reject JSON mode.
-  for(const jsonMode of [true,false]){
-   try{
-    const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{
-     method:'POST',
-     headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny'},
-     body:JSON.stringify({model,temperature:0.2,max_tokens:5200,...(jsonMode?{response_format:{type:'json_object'}}:{}),messages:[{role:'system',content:system},{role:'user',content:prompt}]}),
-     signal:AbortSignal.timeout(2500)
-    });
-    lastStatus=response.status;
-    if(!response.ok){console.warn('OpenRouter practice generation failed for',model,'HTTP',response.status);if(response.status===401||response.status===402||response.status===429)break;if(jsonMode&&response.status!==400)break;continue;}
-    const data=await response.json();
-    const message=data.choices?.[0]?.message;
-    const content=typeof message?.content==='string'?message.content:Array.isArray(message?.content)?message.content.map(part=>part?.text||'').join('\n'):'';
-    const questions=parseQuestions(content);
-    if(questions)return res.json({questions,generatedBy:'openrouter',subject,model});
-    attempted.push(model+': invalid output');
-    // Retry this model without JSON mode only when the JSON-mode response was malformed.
-    if(!jsonMode)console.warn('OpenRouter returned malformed practice JSON for',model);
-   }catch(error){attempted.push(model+': '+(error?.name||'request error'));if(!jsonMode)console.warn('OpenRouter practice request failed for',model,error?.name||'request error');}
-  }
- }
- const reason=lastStatus===401?'OpenRouter rejected its API key. Check OPENROUTER_API_KEY in Vercel.':lastStatus===402?'OpenRouter reports a payment or credit limit.':lastStatus===429?'OpenRouter rate limit reached. Try again shortly.':lastStatus===404?'The configured OpenRouter model was not found. Check OPENROUTER_MODEL and OPENROUTER_FALLBACK_MODELS.':'Both providers failed to return a valid '+count+'-question set. Check that GEMINI_MODEL is a supported Gemini API model and that the configured OpenRouter models are available. Retry in a moment.';
- console.warn('Practice generation exhausted provider fallbacks:',{lastStatus,attempted});
- return fail(res,502,reason);
+ console.warn('Gemini practice generation failed validation or returned no content');
+ if(!process.env.GEMINI_API_KEY)return fail(res,503,'Gemini is not configured. Add GEMINI_API_KEY to the Vercel production environment.');
+ return fail(res,502,'Gemini could not generate a valid '+count+'-question practice set. Check the Gemini API key, model access, quota and billing settings, then retry. No sample questions were substituted.');
 }));
 const lessonInput=z.object({subject:z.string().trim().min(1).max(100),topic:z.string().trim().min(1).max(200),level:z.string().max(30).default('SHS 3'),exam:z.string().max(30).default('WASSCE')});
 app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
@@ -211,24 +190,10 @@ app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
  const {subject,topic,level,exam}=parsed.data;
  const system='You are a careful Ghana SHS tutor preparing students for WASSCE. Teach prerequisite concepts first, use age-appropriate language, worked examples, common mistakes, and a short self-check. Do not fabricate official syllabus claims.';
  const prompt='Create a useful lesson in Markdown. Subject: '+subject+'. Topic: '+topic+'. Level: '+level+'. Exam: '+exam+'. Include goals, prerequisite check, explanation, worked example, common mistakes, exam tip, and 3 self-check questions with answers at the end.';
- // Primary provider: Gemini. OpenRouter is used only if Gemini fails or returns empty output.
- const lesson=await generateWithGemini({system,user:prompt,maxOutputTokens:2200});
+ const lesson=await generateWithGemini({system,user:prompt,maxOutputTokens:2600,temperature:0.4,timeoutMs:18000});
  if(lesson)return res.json({lesson,generatedBy:'gemini',model:process.env.GEMINI_MODEL||'gemini-3.8-flash',subject,topic});
- const key=process.env.OPENROUTER_API_KEY;
- if(!key)return fail(res,503,'Gemini could not generate a lesson and OpenRouter is not configured. Add OPENROUTER_API_KEY to the API deployment environment.');
- let lastStatus=0;
- const configured=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean),'google/gemma-4-31b-it:free','nvidia/nemotron-3-ultra-550b-a55b:free','openrouter/free'];
- const models=configured.map(x=>x.trim()).filter((x,i,a)=>x&&a.indexOf(x)===i).slice(0,3);
- for(let index=0;index<models.length;index++){
-  const model=models[index];
-  try{
-   const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':process.env.OPENROUTER_APP_NAME||'GetLearny'},body:JSON.stringify({model,messages:[{role:'system',content:system},{role:'user',content:prompt}],temperature:0.4,max_tokens:1500}),signal:AbortSignal.timeout(index===0?5000:4500)});
-   lastStatus=response.status;if(!response.ok){console.warn('OpenRouter lesson fallback failed:',model,'HTTP',response.status);continue;}
-   const data=await response.json(),generated=data.choices?.[0]?.message?.content;
-   if(typeof generated==='string'&&generated.trim())return res.json({lesson:generated.trim(),generatedBy:'openrouter',subject,topic,model});
-  }catch(error){console.warn('OpenRouter lesson fallback request failed:',model,error?.name||'request error');}
- }
- return fail(res,502,lastStatus===401?'OpenRouter rejected its API key. Check OPENROUTER_API_KEY in Vercel.':lastStatus===402?'OpenRouter reports a payment or credit limit.':lastStatus===429?'OpenRouter free-model rate limit reached.':'Gemini and OpenRouter could not generate a lesson. Check both provider configurations and model availability, then retry.');
+ if(!process.env.GEMINI_API_KEY)return fail(res,503,'Gemini is not configured. Add GEMINI_API_KEY to the Vercel API environment.');
+ return fail(res,502,'Gemini could not generate a lesson. Check the Gemini API key, model access and quota, then retry. No sample lesson was substituted.');
 }));
 const TEXT_MATERIAL_EXTENSIONS=new Set(['.txt','.md','.markdown','.csv','.json']);
 const OCR_IMAGE_MIMES=new Set(['image/png','image/jpeg','image/webp']);
@@ -242,9 +207,14 @@ app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res
  else if(OCR_IMAGE_MIMES.has(req.file.mimetype)){let worker;try{worker=await createWorker('eng');const result=await worker.recognize(req.file.buffer);extractedText=String(result.data?.text||'').slice(0,150000);processingStatus=extractedText.trim()?'ready':'ocr_failed';}catch(error){console.error('Image OCR failed:',error.message);processingStatus='ocr_failed';}finally{if(worker)await worker.terminate().catch(()=>{});}}
  else{
   try{const parsed=await pdfParse(req.file.buffer);extractedText=String(parsed.text||'').slice(0,150000);processingStatus=extractedText.trim()?'ready':'needs_ocr';}catch{processingStatus='needs_ocr';}
-  if(!extractedText.trim()&&req.file.size<=6*1024*1024&&process.env.OPENROUTER_API_KEY){
-   const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,2);
-   for(const model of models){try{const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+process.env.OPENROUTER_API_KEY,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny OCR'},body:JSON.stringify({model,temperature:0,max_tokens:6000,messages:[{role:'system',content:'You are an OCR engine for a student study document. Transcribe the visible text faithfully, preserving headings, formulas, numbering and tables as clearly as possible. Do not summarize or invent missing text. If pages contain no readable text, return an empty string.'},{role:'user',content:[{type:'text',text:'Extract all readable text from this scanned study PDF. Return only the transcription.'},{type:'file',file:{filename:path.basename(req.file.originalname||'study-material.pdf'),file_data:'data:application/pdf;base64,'+req.file.buffer.toString('base64')}}]}]}),signal:AbortSignal.timeout(8000)});if(!response.ok)continue;const data=await response.json(),text=data.choices?.[0]?.message?.content;if(typeof text==='string'&&text.trim()){extractedText=text.trim().slice(0,150000);processingStatus='ready';break;}}catch(error){console.warn('Scanned PDF AI OCR attempt failed:',error.message);}}
+  if(!extractedText.trim()&&req.file.size<=6*1024*1024){
+   const transcription=await generateWithGemini({
+    system:'You are an OCR engine for a student study document. Transcribe visible text faithfully, preserving headings, formulas, numbering and tables. Do not summarize or invent missing text. If pages contain no readable text, return an empty string.',
+    user:[{text:'Extract all readable text from this scanned study PDF. Return only the transcription.'},{inlineData:{mimeType:'application/pdf',data:req.file.buffer.toString('base64')}}],
+    temperature:0,maxOutputTokens:6000,timeoutMs:15000
+   });
+   if(transcription){extractedText=transcription.slice(0,150000);processingStatus='ready';}
+  }
   }
  }
  const title=String(req.body?.material_title||req.file.originalname).trim();
@@ -258,12 +228,23 @@ app.post('/api/v1/documents/:id/ocr',auth,asyncRoute(async(req,res)=>{
  if(!found.rows.length)return fail(res,404,'Study material not found');
  const doc=found.rows[0],buffer=doc.content;if(!buffer)return fail(res,422,'Original file unavailable. Upload it again.');
  let extractedText='';
- if(OCR_IMAGE_MIMES.has(doc.mime_type)){let worker;try{worker=await createWorker('eng');const result=await worker.recognize(buffer);extractedText=String(result.data?.text||'').trim().slice(0,150000);}catch(error){console.error('Stored image OCR failed:',error.message);return fail(res,502,'OCR could not read this image. Try a clearer image.')}finally{if(worker)await worker.terminate().catch(()=>{})}}
- else if(doc.mime_type==='application/pdf'){
-  try{const parsed=await pdfParse(buffer);extractedText=String(parsed.text||'').trim().slice(0,150000)}catch{}
-  if(!extractedText&&buffer.length<=6*1024*1024&&process.env.OPENROUTER_API_KEY){const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,2);for(const model of models){try{const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+process.env.OPENROUTER_API_KEY,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':'GetLearny OCR'},body:JSON.stringify({model,temperature:0,max_tokens:6000,messages:[{role:'system',content:'Transcribe all visible text from the study PDF faithfully. Preserve headings, formulas and numbering. Do not summarize or invent text. Return only transcription.'},{role:'user',content:[{type:'text',text:'OCR this scanned study PDF.'},{type:'file',file:{filename:path.basename(doc.original_name||'study-material.pdf'),file_data:'data:application/pdf;base64,'+buffer.toString('base64')}}]}]}),signal:AbortSignal.timeout(8000)});if(!response.ok)continue;const data=await response.json(),content=data.choices?.[0]?.message?.content;if(typeof content==='string'&&content.trim()){extractedText=content.trim().slice(0,150000);break}}catch(error){console.warn('Stored PDF OCR attempt failed:',error.message)}}}
+ if(OCR_IMAGE_MIMES.has(doc.mime_type)){
+  let worker;
+  try{worker=await createWorker('eng');const result=await worker.recognize(buffer);extractedText=String(result.data?.text||'').trim().slice(0,150000);}
+  catch(error){console.error('Stored image OCR failed:',error.message);return fail(res,502,'OCR could not read this image. Try a clearer image.');}
+  finally{if(worker)await worker.terminate().catch(()=>{});}
+ }else if(doc.mime_type==='application/pdf'){
+  try{const parsed=await pdfParse(buffer);extractedText=String(parsed.text||'').trim().slice(0,150000);}catch{}
+  if(!extractedText&&buffer.length<=6*1024*1024){
+   const transcription=await generateWithGemini({
+    system:'Transcribe all visible text from the study PDF faithfully. Preserve headings, formulas and numbering. Do not summarize or invent text. Return only transcription.',
+    user:[{text:'OCR this scanned study PDF.'},{inlineData:{mimeType:'application/pdf',data:buffer.toString('base64')}}],
+    temperature:0,maxOutputTokens:6000,timeoutMs:15000
+   });
+   if(transcription)extractedText=transcription.trim().slice(0,150000);
+  }
  }else return fail(res,415,'OCR is available for scanned PDFs and PNG, JPG or WebP images');
- if(!extractedText)return fail(res,422,'OCR found no readable text. Try a clearer scan or upload page images.');
+ if(!extractedText)return fail(res,422,'OCR found no readable text. Check Gemini configuration for scanned PDFs or try a clearer scan.');
  const updated=await query('UPDATE uploaded_documents SET extracted_text=$1,processing_status=$2 WHERE id=$3 AND user_id=$4 RETURNING id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at',[extractedText,'ready',doc.id,req.user.sub]);
  res.json({document:updated.rows[0],message:'OCR complete. The AI tutor can now use this material.',characters:extractedText.length});
 }));
@@ -272,13 +253,17 @@ app.post('/api/v1/documents/:id/ask',auth,asyncRoute(async(req,res)=>{
  if(!parsed.success)return fail(res,400,'Enter a question of 3 to 1000 characters');
  const result=await query('SELECT original_name,extracted_text,processing_status FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);
  if(!result.rowCount)return fail(res,404,'Study material not found');
- const doc=result.rows[0];if(!doc.extracted_text?.trim())return fail(res,422,doc.processing_status==='needs_ocr'?'This PDF appears to be scanned or image-only. OCR must be configured before the tutor can read it.':'No readable text was extracted from this file.');
- if(!process.env.OPENROUTER_API_KEY)return fail(res,503,'Document AI tutoring needs OPENROUTER_API_KEY configured in the deployment.');
- const models=[process.env.OPENROUTER_MODEL||'openrouter/free',...(process.env.OPENROUTER_FALLBACK_MODELS||'').split(',').map(x=>x.trim()).filter(Boolean)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,3);
- for(const model of models){try{const response=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENROUTER_API_KEY}`,'Content-Type':'application/json','HTTP-Referer':process.env.OPENROUTER_SITE_URL||process.env.APP_URL||'https://getlearny.vercel.app','X-Title':process.env.OPENROUTER_APP_NAME||'GetLearny'},body:JSON.stringify({model,messages:[{role:'system',content:'You are a supportive Ghana SHS tutor. Answer the student using the supplied study document as the primary source. Explain concepts clearly, use age-appropriate language, show a short example when useful, and say when the document does not contain enough information. Do not invent quotations or pretend unsupported facts came from the file.'},{role:'user',content:`Study file: ${doc.original_name}\n\nDOCUMENT EXCERPT:\n${doc.extracted_text.slice(0,30000)}\n\nSTUDENT QUESTION:\n${parsed.data.question}`}],temperature:0.3,max_tokens:1000}),signal:AbortSignal.timeout(10000)});if(!response.ok)continue;const data=await response.json();const answer=data.choices?.[0]?.message?.content;if(typeof answer==='string'&&answer.trim())return res.json({answer:answer.trim(),source:doc.original_name,generatedBy:'openrouter'});}catch{/* try the next configured model */}}
- return fail(res,502,'The document tutor could not reach an available AI model. Please try again.');
+ const doc=result.rows[0];
+ if(!doc.extracted_text?.trim())return fail(res,422,doc.processing_status==='needs_ocr'?'This PDF appears to be scanned or image-only. Run OCR before asking the tutor.':'No readable text was extracted from this file.');
+ const answer=await generateWithGemini({
+  system:'You are a supportive Ghana SHS tutor. Answer the student using the supplied study document as the primary source. Explain concepts clearly, use age-appropriate language, show a short example when useful, and say when the document does not contain enough information. Do not invent quotations or pretend unsupported facts came from the file.',
+  user:'Study file: '+doc.original_name+'\n\nDOCUMENT EXCERPT:\n'+doc.extracted_text.slice(0,30000)+'\n\nSTUDENT QUESTION:\n'+parsed.data.question,
+  temperature:0.3,maxOutputTokens:1200,timeoutMs:12000
+ });
+ if(answer)return res.json({answer,source:doc.original_name,generatedBy:'gemini',model:process.env.GEMINI_MODEL||'gemini-3.8-flash'});
+ if(!process.env.GEMINI_API_KEY)return fail(res,503,'Gemini is not configured. Add GEMINI_API_KEY to the Vercel API environment.');
+ return fail(res,502,'Gemini could not answer from this document. Check Gemini API access and quota, then retry.');
 }));
-
 app.get('/api/v1/documents',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at FROM uploaded_documents WHERE user_id=$1 ORDER BY subject_name,created_at DESC LIMIT 100',[req.user.sub]);res.json({documents:r.rows})}));
 app.get('/api/v1/documents/:id',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT original_name,mime_type,content FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);if(!r.rowCount)return fail(res,404,'Document not found');res.setHeader('Content-Type',r.rows[0].mime_type);res.setHeader('Content-Disposition','attachment; filename="study-material"');res.send(r.rows[0].content)}));
 app.use((err,_req,res,_next)=>{if(err instanceof multer.MulterError)return fail(res,err.code==='LIMIT_FILE_SIZE'?413:400,err.code==='LIMIT_FILE_SIZE'?'File is too large':'Upload failed');if(err.message==='Origin not allowed by CORS')return fail(res,403,err.message);if(typeof err.message==='string'&&err.message.startsWith('Supported study materials:'))return fail(res,415,err.message);if(typeof err.message==='string'&&err.message.startsWith('Profile pictures must be'))return fail(res,415,err.message);console.error(err);return fail(res,500,process.env.NODE_ENV==='production'?'Unexpected server error':err.message||'Unexpected server error')});
