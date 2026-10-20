@@ -28,48 +28,66 @@ app.use(express.json({limit:'1mb'})); app.use(morgan(process.env.NODE_ENV==='pro
 app.use('/api/v1/auth',rateLimit({windowMs:15*60*1000,limit:30,standardHeaders:true,legacyHeaders:false}));
 app.use('/api/v1',rateLimit({windowMs:60*1000,limit:120,standardHeaders:true,legacyHeaders:false}));
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
-async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false,timeoutMs=15000,onFailure}){
+async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false,timeoutMs=15000,onFailure,onModel}){
  const apiKey=process.env.GEMINI_API_KEY;
  if(!apiKey){console.warn('Gemini is not configured: GEMINI_API_KEY is missing');onFailure?.({kind:'missing_key'});return null;}
- const model=process.env.GEMINI_MODEL||'gemini-3.8-flash';
- try{
+ const primaryModel=process.env.GEMINI_MODEL||'gemini-3.8-flash';
+ const configuredFallbacks=(process.env.GEMINI_FALLBACK_MODELS||'gemini-3.6-flash,gemini-3.5-flash-lite').split(',').map(value=>value.trim()).filter(Boolean);
+ const models=[...new Set([primaryModel,...configuredFallbacks])].slice(0,3);
+ const deadline=Date.now()+timeoutMs;
+ let lastFailure=null;
+ for(let index=0;index<models.length;index++){
+  const model=models[index];
+  const remaining=deadline-Date.now();
+  if(remaining<1000)break;
+  const attemptTimeout=Math.max(2500,Math.min(10000,Math.floor(remaining/(models.length-index))));
   // Gemini 3.x/4.x reject legacy sampling parameters such as temperature.
-  // Use a low thinking level for interactive learning tasks to keep responses
-  // fast and leave the output-token budget available for the requested content.
+  // Use low thinking for interactive learning tasks and retain the token budget for the answer.
   const generationConfig={maxOutputTokens,...(json?{responseMimeType:'application/json'}:{})};
   if(/^gemini-(?:3|4)(?:[.-])/i.test(model))generationConfig.thinkingConfig={thinkingLevel:'low'};
   else generationConfig.temperature=temperature;
-  const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
-   method:'POST',
-   headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
-   body:JSON.stringify({
-    systemInstruction:{parts:[{text:system}]},
-    contents:[{role:'user',parts:Array.isArray(user)?user:[{text:user}]}],
-    generationConfig
-   }),
-   signal:AbortSignal.timeout(timeoutMs)
-  });
-  if(!response.ok){
-   let detail='';
-   try{const errorData=await response.json();detail=String(errorData.error?.message||'').slice(0,240)}catch{}
-   console.warn('Gemini request failed: HTTP',response.status,detail);
-   onFailure?.({kind:'http',status:response.status,detail});
-   return null;
+  try{
+   const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
+    body:JSON.stringify({
+     systemInstruction:{parts:[{text:system}]},
+     contents:[{role:'user',parts:Array.isArray(user)?user:[{text:user}]}],
+     generationConfig
+    }),
+    signal:AbortSignal.timeout(attemptTimeout)
+   });
+   if(!response.ok){
+    let detail='';
+    try{const errorData=await response.json();detail=String(errorData.error?.message||'').slice(0,240)}catch{}
+    lastFailure={kind:'http',status:response.status,detail,model};
+    console.warn('Gemini request failed: HTTP',response.status,'model',model,detail);
+    // Retry only transient errors. Invalid keys, permissions and malformed requests
+    // should fail quickly instead of repeatedly hitting the provider.
+    if([408,429,500,502,503,504].includes(response.status)&&index<models.length-1)continue;
+    break;
+   }
+   const data=await response.json();
+   const text=(data.candidates?.[0]?.content?.parts||[]).map(part=>part.text||'').join('').trim();
+   if(!text){
+    const reason=data.promptFeedback?.blockReason||data.candidates?.[0]?.finishReason||'no finish reason';
+    console.warn('Gemini returned no text from model',model,reason);
+    lastFailure={kind:'empty',reason:String(reason),model};
+    if(index<models.length-1)continue;
+    break;
+   }
+   onModel?.(model);
+   return text;
+  }catch(error){
+   const kind=error?.name==='TimeoutError'||error?.name==='AbortError'?'timeout':'network';
+   console.warn('Gemini request failed:',error?.name||'request error','model',model);
+   lastFailure={kind,model};
+   if(index<models.length-1&&Date.now()<deadline-1000)continue;
+   break;
   }
-  const data=await response.json();
-  const text=(data.candidates?.[0]?.content?.parts||[]).map(part=>part.text||'').join('').trim();
-  if(!text){
-   const reason=data.promptFeedback?.blockReason||data.candidates?.[0]?.finishReason||'no finish reason';
-   console.warn('Gemini returned no text',reason);
-   onFailure?.({kind:'empty',reason:String(reason)});
-  }
-  return text||null;
- }catch(error){
-  const kind=error?.name==='TimeoutError'||error?.name==='AbortError'?'timeout':'network';
-  console.warn('Gemini request failed:',error?.name||'request error');
-  onFailure?.({kind});
-  return null;
  }
+ onFailure?.(lastFailure||{kind:'timeout'});
+ return null;
 }
 const fail=(res,status,error)=>res.status(status).json({error});
 const envReady=()=>Boolean(process.env.JWT_SECRET&&process.env.JWT_SECRET.length>=32);
@@ -193,9 +211,10 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
   return questions.length===count?questions:null;
  }
  let geminiFailure=null;
- const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:6000,json:true,temperature:0.2,timeoutMs:24000,onFailure:failure=>{geminiFailure=failure;}});
+ let generatedModel=process.env.GEMINI_MODEL||'gemini-3.8-flash';
+ const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:6000,json:true,temperature:0.2,timeoutMs:24000,onFailure:failure=>{geminiFailure=failure;},onModel:model=>{generatedModel=model;}});
  const geminiQuestions=parseQuestions(geminiText);
- if(geminiQuestions)return res.json({questions:geminiQuestions,generatedBy:'gemini',subject,model:process.env.GEMINI_MODEL||'gemini-3.8-flash'});
+ if(geminiQuestions)return res.json({questions:geminiQuestions,generatedBy:'gemini',subject,model:generatedModel});
  if(geminiText&&!geminiQuestions)geminiFailure={kind:'invalid_json'};
  console.warn('Gemini practice generation failed validation or returned no content',geminiFailure?.kind||'unknown');
  if(!process.env.GEMINI_API_KEY)return fail(res,503,'Gemini is not configured. Add GEMINI_API_KEY to the Vercel production environment.');
