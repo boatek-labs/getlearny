@@ -259,25 +259,15 @@ app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res
   extractedText=req.file.buffer.toString('utf8').replace(/\u0000/g,'').slice(0,150000);
   processingStatus=extractedText.trim()?'ready':'uploaded';
  }else if(OCR_IMAGE_MIMES.has(req.file.mimetype)){
-  let worker;
-  try{worker=await createWorker('eng');const result=await worker.recognize(req.file.buffer);extractedText=String(result.data?.text||'').slice(0,150000);processingStatus=extractedText.trim()?'ready':'ocr_failed';}
-  catch(error){console.error('Image OCR failed:',error.message);processingStatus='ocr_failed';}
-  finally{if(worker)await worker.terminate().catch(()=>{});}
+  // Save first; OCR runs on demand so slow processing cannot break uploads.
+  processingStatus='needs_ocr';
  }else{
   try{const parsed=await pdfParse(req.file.buffer);extractedText=String(parsed.text||'').slice(0,150000);processingStatus=extractedText.trim()?'ready':'needs_ocr';}
   catch{processingStatus='needs_ocr';}
-  if(!extractedText.trim()&&req.file.size<=6*1024*1024){
-   const transcription=await generateWithGemini({
-    system:'You are an OCR engine for a student study document. Transcribe visible text faithfully, preserving headings, formulas, numbering and tables. Do not summarize or invent missing text. If pages contain no readable text, return an empty string.',
-    user:[{text:'Extract all readable text from this scanned study PDF. Return only the transcription.'},{inlineData:{mimeType:'application/pdf',data:req.file.buffer.toString('base64')}}],
-    temperature:0,maxOutputTokens:6000,timeoutMs:15000
-   });
-   if(transcription){extractedText=transcription.slice(0,150000);processingStatus='ready';}
-  }
  }
  const title=String(req.body?.material_title||req.file.originalname).trim();
  const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,extracted_text,processing_status,subject_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at',[req.user.sub,path.basename(title).slice(0,255)||path.basename(req.file.originalname).slice(0,255),'database',req.file.mimetype,req.file.size,req.file.buffer,extractedText,processingStatus,String(req.body?.subject_name||'General').trim().slice(0,120)||'General']);
- const messages={needs_ocr:'This PDF has no selectable text. Gemini OCR could not extract text from this file; try a smaller scanned PDF or upload clear page images.',ocr_failed:'OCR could not read this image. Try a clearer, well-lit image.',ready:'Study material saved and text extracted. The AI tutor can now use it.',uploaded:'File saved, but no readable text was found.'};
+ const messages={needs_ocr:'Material saved. Run OCR to extract readable text before asking the AI tutor.',ocr_failed:'OCR could not read this material. Try a clearer scan or image.',ready:'Study material saved and text extracted. The AI tutor can now use it.',uploaded:'File saved, but no readable text was found.'};
  res.status(201).json({document:r.rows[0],message:messages[processingStatus]||messages.uploaded});
 }));
 app.post('/api/v1/documents/:id/ocr',auth,asyncRoute(async(req,res)=>{
