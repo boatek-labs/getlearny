@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -248,10 +248,27 @@ app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
  return fail(res,502,'Gemini could not generate a lesson. Check the Gemini API key, model access and quota, then retry. No sample lesson was substituted.');
 }));
 const TEXT_MATERIAL_EXTENSIONS=new Set(['.txt','.md','.markdown','.csv','.json']);
+function cloudinaryConfig(){try{const value=process.env.CLOUDINARY_URL;if(!value)return null;const url=new URL(value);if(url.protocol!=='cloudinary:')return null;return {cloudName:url.hostname,apiKey:decodeURIComponent(url.username),apiSecret:decodeURIComponent(url.password)}}catch{return null}}
+function cloudinarySignature(params,secret){const base=Object.keys(params).filter(key=>key!=='file'&&key!=='api_key'&&key!=='resource_type'&&key!=='signature').sort().map(key=>key+'='+params[key]).join('&');return createHash('sha1').update(base+secret).digest('hex')}
+function validCloudinaryUrl(value){try{const url=new URL(value);return url.protocol==='https:'&&url.hostname==='res.cloudinary.com'}catch{return false}}
+async function downloadCloudinaryAsset(url){if(!validCloudinaryUrl(url))throw new Error('Stored Cloudinary asset URL is invalid');const response=await fetch(url,{signal:AbortSignal.timeout(20000)});if(!response.ok)throw new Error('Could not retrieve the stored study material from Cloudinary');return Buffer.from(await response.arrayBuffer())}
 const OCR_IMAGE_MIMES=new Set(['image/png','image/jpeg','image/webp']);
 const TEXT_MATERIAL_MIMES=new Set(['text/plain','text/markdown','text/csv','application/json','application/octet-stream']);
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||12)*1024*1024,files:1},fileFilter:(_req,file,cb)=>{const ext=path.extname(file.originalname||'').toLowerCase();if(file.mimetype==='application/pdf'||OCR_IMAGE_MIMES.has(file.mimetype)||(TEXT_MATERIAL_EXTENSIONS.has(ext)&&TEXT_MATERIAL_MIMES.has(file.mimetype)))return cb(null,true);return cb(new Error('Supported study materials: PDF, TXT, Markdown, CSV, JSON, PNG, JPG and WEBP files'))}});const avatarUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:2*1024*1024,files:1},fileFilter:(_req,file,cb)=>{if(!['image/jpeg','image/png','image/webp'].includes(file.mimetype))return cb(new Error('Profile pictures must be JPG, PNG or WebP'));cb(null,true)}});
 app.post('/api/v1/profile/avatar',auth,avatarUpload.single('file'),asyncRoute(async(req,res)=>{if(!req.file)return fail(res,400,'Choose a JPG, PNG or WebP profile picture');const avatar_data='data:'+req.file.mimetype+';base64,'+req.file.buffer.toString('base64');const r=await query('UPDATE users SET avatar_data=$1,updated_at=now() WHERE id=$2 RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at',[avatar_data,req.user.sub]);res.json({user:r.rows[0],message:'Profile picture updated'})}));
+app.post('/api/v1/documents/upload-signature',auth,asyncRoute(async(req,res)=>{
+ const cloud=cloudinaryConfig();if(!cloud)return fail(res,503,'Cloudinary storage is not configured. Add CLOUDINARY_URL to the Vercel production environment.');
+ const timestamp=Math.floor(Date.now()/1000);const folder='getlearny/users/'+String(req.user.sub)+'/materials';const public_id=randomUUID();const params={folder,public_id,timestamp};
+ res.json({cloud_name:cloud.cloudName,api_key:cloud.apiKey,timestamp,folder,public_id,signature:cloudinarySignature(params,cloud.apiSecret),max_file_mb:100});
+}));
+app.post('/api/v1/documents/register-cloudinary',auth,asyncRoute(async(req,res)=>{
+ const cloud=cloudinaryConfig();if(!cloud)return fail(res,503,'Cloudinary storage is not configured. Add CLOUDINARY_URL to the Vercel production environment.');
+ const schema=z.object({secure_url:z.string().url().max(2048),public_id:z.string().min(1).max(500),original_name:z.string().trim().min(1).max(255),mime_type:z.string().min(1).max(120),size_bytes:z.number().int().positive().max(100*1024*1024),subject_name:z.string().trim().max(120).optional().default('General'),material_title:z.string().trim().max(255).optional()});
+ const parsed=schema.safeParse(req.body);if(!parsed.success)return fail(res,400,'Invalid Cloudinary upload details');const d=parsed.data;
+ const expectedPrefix='getlearny/users/'+String(req.user.sub)+'/materials/';if(!validCloudinaryUrl(d.secure_url)||!d.public_id.startsWith(expectedPrefix))return fail(res,403,'This Cloudinary file does not belong to your account.');
+ const title=String(d.material_title||d.original_name).trim();const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,extracted_text,processing_status,subject_name) VALUES($1,$2,$3,$4,$5,NULL,$6,$7,$8) RETURNING id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at',[req.user.sub,path.basename(title).slice(0,255)||path.basename(d.original_name).slice(0,255),d.secure_url,d.mime_type,d.size_bytes,'','needs_ocr',String(d.subject_name||'General').trim().slice(0,120)||'General']);
+ res.status(201).json({document:r.rows[0],message:'Material uploaded securely to Cloudinary. Run OCR to extract readable text before asking the AI tutor.'});
+}));
 app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res)=>{
  if(!req.file)return fail(res,400,'Select a supported study material file');
  let extractedText='',processingStatus='uploaded';
@@ -271,9 +288,9 @@ app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res
  res.status(201).json({document:r.rows[0],message:messages[processingStatus]||messages.uploaded});
 }));
 app.post('/api/v1/documents/:id/ocr',auth,asyncRoute(async(req,res)=>{
- const found=await query('SELECT id,original_name,mime_type,content FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);
+ const found=await query('SELECT id,original_name,mime_type,content,storage_path FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);
  if(!found.rows.length)return fail(res,404,'Study material not found');
- const doc=found.rows[0],buffer=doc.content;if(!buffer)return fail(res,422,'Original file unavailable. Upload it again.');
+ const doc=found.rows[0];let buffer=doc.content;if(!buffer&&doc.storage_path){try{buffer=await downloadCloudinaryAsset(doc.storage_path)}catch(error){console.error('Cloudinary material retrieval failed:',error.message);return fail(res,502,'Could not retrieve this material from Cloudinary. Try again later.')}}if(!buffer)return fail(res,422,'Original file unavailable. Upload it again.');
  let extractedText='';
  if(OCR_IMAGE_MIMES.has(doc.mime_type)){
   let worker;
@@ -312,6 +329,6 @@ app.post('/api/v1/documents/:id/ask',auth,asyncRoute(async(req,res)=>{
  return fail(res,502,'Gemini could not answer from this document. Check Gemini API access and quota, then retry.');
 }));
 app.get('/api/v1/documents',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at FROM uploaded_documents WHERE user_id=$1 ORDER BY subject_name,created_at DESC LIMIT 100',[req.user.sub]);res.json({documents:r.rows})}));
-app.get('/api/v1/documents/:id',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT original_name,mime_type,content FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);if(!r.rowCount)return fail(res,404,'Document not found');res.setHeader('Content-Type',r.rows[0].mime_type);res.setHeader('Content-Disposition','attachment; filename="study-material"');res.send(r.rows[0].content)}));
+app.get('/api/v1/documents/:id',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT original_name,mime_type,content,storage_path FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);if(!r.rowCount)return fail(res,404,'Document not found');if(!r.rows[0].content&&validCloudinaryUrl(r.rows[0].storage_path))return res.redirect(302,r.rows[0].storage_path);if(!r.rows[0].content)return fail(res,404,'Stored file is unavailable');res.setHeader('Content-Type',r.rows[0].mime_type);res.setHeader('Content-Disposition','attachment; filename="study-material"');res.send(r.rows[0].content)}));
 app.use((err,_req,res,_next)=>{if(err instanceof multer.MulterError)return fail(res,err.code==='LIMIT_FILE_SIZE'?413:400,err.code==='LIMIT_FILE_SIZE'?'File is too large':'Upload failed');if(err.message==='Origin not allowed by CORS')return fail(res,403,err.message);if(typeof err.message==='string'&&err.message.startsWith('Supported study materials:'))return fail(res,415,err.message);if(typeof err.message==='string'&&err.message.startsWith('Profile pictures must be'))return fail(res,415,err.message);console.error(err);return fail(res,500,process.env.NODE_ENV==='production'?'Unexpected server error':err.message||'Unexpected server error')});
 export default app;
