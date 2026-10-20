@@ -247,6 +247,35 @@ app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
  if(!process.env.GEMINI_API_KEY)return fail(res,503,'Gemini is not configured. Add GEMINI_API_KEY to the Vercel API environment.');
  return fail(res,502,'Gemini could not generate a lesson. Check the Gemini API key, model access and quota, then retry. No sample lesson was substituted.');
 }));
+
+
+// Personal tutor endpoint. Context is loaded server-side and scoped to the signed-in learner.
+const tutorChatInput=z.object({question:z.string().trim().min(2).max(4000),subject:z.string().trim().max(100).optional().default(''),use_materials:z.boolean().optional().default(true),history:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().max(4000)})).max(12).optional().default([])});
+app.post('/api/v1/tutor/chat',auth,asyncRoute(async(req,res)=>{
+ const parsed=tutorChatInput.safeParse(req.body);if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
+ const {question,subject,use_materials,history}=parsed.data;
+ const [profile,logs,tests,journal,docs,dashboard]=await Promise.all([
+  query('SELECT name,class_level,subjects FROM users WHERE id=$1',[req.user.sub]),
+  query('SELECT subject,topic,minutes_spent,status,notes,created_at FROM learning_logs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 12',[req.user.sub]),
+  query('SELECT subject,title,score,max_score,taken_at FROM test_logs WHERE user_id=$1 ORDER BY taken_at DESC LIMIT 8',[req.user.sub]),
+  query('SELECT learned,difficult,next_step,created_at FROM journal_entries WHERE user_id=$1 ORDER BY created_at DESC LIMIT 6',[req.user.sub]),
+  query('SELECT id,original_name,subject_name,processing_status,extracted_text,created_at FROM uploaded_documents WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30',[req.user.sub]),
+  query("SELECT count(*) FILTER(WHERE status='completed')::int AS completed_topics,coalesce(sum(minutes_spent),0)::int AS minutes_studied FROM learning_logs WHERE user_id=$1",[req.user.sub])
+ ]);
+ const learner=profile.rows[0]||{};
+ const relevantDocs=use_materials?docs.rows.filter(d=>d.processing_status==='ready'&&d.extracted_text?.trim()&&(!subject||!d.subject_name||d.subject_name.toLowerCase()===subject.toLowerCase()||d.subject_name.toLowerCase()==='general')).slice(0,4):[];
+ const materials=relevantDocs.map(d=>({file:d.original_name,subject:d.subject_name||'General',excerpt:d.extracted_text.slice(0,7000)}));
+ const subjectLogs=logs.rows.filter(x=>!subject||x.subject.toLowerCase()===subject.toLowerCase()).slice(0,8);
+ const subjectTests=tests.rows.filter(x=>!subject||x.subject.toLowerCase()===subject.toLowerCase()).slice(0,6).map(x=>({...x,percent:Math.round(Number(x.score)/Math.max(Number(x.max_score),1)*100)}));
+ const context={learner:{name:learner.name,class_level:learner.class_level||'Not specified',subjects:learner.subjects||[]},focus_subject:subject||'All subjects',progress:dashboard.rows[0]||{},recent_learning:subjectLogs.map(x=>({subject:x.subject,topic:x.topic,status:x.status,minutes:x.minutes_spent,notes:x.notes,at:x.created_at})),recent_tests:subjectTests,journal:journal.rows.map(x=>({learned:x.learned,difficult:x.difficult,next_step:x.next_step,at:x.created_at})),study_materials:materials,available_materials:docs.rows.map(d=>({file:d.original_name,subject:d.subject_name,status:d.processing_status})).slice(0,20)};
+ const system='You are GetLearny Tutor, a thoughtful, encouraging Ghana SHS/Form 3 learning coach supporting WASSCE preparation. Be clear, specific, and interactive. Adapt explanations to the learner level. Use the learner’s own study materials when provided and relevant; clearly say if the notes do not support a claim. Connect answers to their recent lessons, test results, and journal only when useful. If test history shows a weak area, suggest a focused next step without shaming the learner. For academic questions, explain the idea, show a worked example when appropriate, then give one small check-for-understanding question. For direct questions answer directly first. Never claim to have read a file unless its extracted text is included. Do not fabricate learner records, scores, sources, or syllabus requirements. Use concise Markdown. Do not reveal private context unrelated to the question.';
+ const userPrompt='LEARNER CONTEXT (account-scoped, may contain empty lists):\n'+JSON.stringify(context)+'\n\nRECENT CONVERSATION:\n'+JSON.stringify(history.slice(-10))+'\n\nCURRENT QUESTION:\n'+question;
+ const answer=await generateWithGemini({system,user:userPrompt,temperature:0.35,maxOutputTokens:1700,timeoutMs:22000});
+ if(answer)return res.json({answer,generatedBy:'gemini',model:process.env.GEMINI_MODEL||'configured Gemini model',context_sources:[...(materials.length?['study files']:[]),...(subjectLogs.length?['learning logs']:[]),...(subjectTests.length?['test results']:[]),...(journal.rows.length?['learning journal']:[]),'learning profile'],context_summary:materials.length+' readable file(s), '+subjectLogs.length+' learning log(s), '+subjectTests.length+' test result(s) checked'});
+ if(!process.env.GEMINI_API_KEY)return fail(res,503,'Gemini is not configured. Add GEMINI_API_KEY to the API deployment.');
+ return fail(res,502,'The AI tutor could not generate a response. Check Gemini model access, API quota and server logs, then retry. No answer was fabricated.');
+}));
+
 const TEXT_MATERIAL_EXTENSIONS=new Set(['.txt','.md','.markdown','.csv','.json']);
 function cloudinaryConfig(){try{const value=process.env.CLOUDINARY_URL;if(!value)return null;const url=new URL(value);if(url.protocol!=='cloudinary:')return null;return {cloudName:url.hostname,apiKey:decodeURIComponent(url.username),apiSecret:decodeURIComponent(url.password)}}catch{return null}}
 function cloudinarySignature(params,secret){const base=Object.keys(params).filter(key=>key!=='file'&&key!=='api_key'&&key!=='resource_type'&&key!=='signature').sort().map(key=>key+'='+params[key]).join('&');return createHash('sha1').update(base+secret).digest('hex')}
