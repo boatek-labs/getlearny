@@ -28,7 +28,7 @@ app.use(express.json({limit:'1mb'})); app.use(morgan(process.env.NODE_ENV==='pro
 app.use('/api/v1/auth',rateLimit({windowMs:15*60*1000,limit:30,standardHeaders:true,legacyHeaders:false}));
 app.use('/api/v1',rateLimit({windowMs:60*1000,limit:120,standardHeaders:true,legacyHeaders:false}));
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
-async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false,timeoutMs=15000,onFailure,onModel,validateResponse}){
+export async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false,timeoutMs=15000,onFailure,onModel,validateResponse}){
  const apiKey=process.env.GEMINI_API_KEY;
  if(!apiKey){console.warn('Gemini is not configured: GEMINI_API_KEY is missing');onFailure?.({kind:'missing_key'});return null;}
  const primaryModel=process.env.GEMINI_MODEL||'gemini-3.8-flash';
