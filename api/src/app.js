@@ -28,7 +28,7 @@ app.use(express.json({limit:'1mb'})); app.use(morgan(process.env.NODE_ENV==='pro
 app.use('/api/v1/auth',rateLimit({windowMs:15*60*1000,limit:30,standardHeaders:true,legacyHeaders:false}));
 app.use('/api/v1',rateLimit({windowMs:60*1000,limit:120,standardHeaders:true,legacyHeaders:false}));
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
-async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false,timeoutMs=15000,onFailure,onModel}){
+async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false,timeoutMs=15000,onFailure,onModel,validateResponse}){
  const apiKey=process.env.GEMINI_API_KEY;
  if(!apiKey){console.warn('Gemini is not configured: GEMINI_API_KEY is missing');onFailure?.({kind:'missing_key'});return null;}
  const primaryModel=process.env.GEMINI_MODEL||'gemini-3.8-flash';
@@ -64,7 +64,7 @@ async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=
     console.warn('Gemini request failed: HTTP',response.status,'model',model,detail);
     // Retry only transient errors. Invalid keys, permissions and malformed requests
     // should fail quickly instead of repeatedly hitting the provider.
-    if([408,429,500,502,503,504].includes(response.status)&&index<models.length-1)continue;
+    if([404,408,429,500,502,503,504].includes(response.status)&&index<models.length-1)continue;
     break;
    }
    const data=await response.json();
@@ -73,6 +73,12 @@ async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=
     const reason=data.promptFeedback?.blockReason||data.candidates?.[0]?.finishReason||'no finish reason';
     console.warn('Gemini returned no text from model',model,reason);
     lastFailure={kind:'empty',reason:String(reason),model};
+    if(index<models.length-1)continue;
+    break;
+   }
+   if(typeof validateResponse==='function'&&!validateResponse(text)){
+    lastFailure={kind:'invalid_response',model};
+    console.warn('Gemini response failed output validation for model',model);
     if(index<models.length-1)continue;
     break;
    }
@@ -203,7 +209,6 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
     else if(/^\d+$/.test(answer.trim()))answer=Number(answer.trim());
     else {const matched=options.findIndex(o=>o.toLowerCase()===answer.trim().toLowerCase());answer=matched;}
    }
-   if(Number.isInteger(answer)&&answer===4)answer=3;
    if(!Number.isInteger(answer)||answer<0||answer>3)return null;
    const explanation=cleanText(item.explanation||item.reason||item.rationale);
    questions.push({question,options,answer,explanation,topic:cleanText(item.topic)||topic||subject});
@@ -212,10 +217,10 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
  }
  let geminiFailure=null;
  let generatedModel=process.env.GEMINI_MODEL||'gemini-3.8-flash';
- const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:6000,json:true,temperature:0.2,timeoutMs:24000,onFailure:failure=>{geminiFailure=failure;},onModel:model=>{generatedModel=model;}});
+ const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:6000,json:true,temperature:0.2,timeoutMs:24000,validateResponse:text=>Boolean(parseQuestions(text)),onFailure:failure=>{geminiFailure=failure;},onModel:model=>{generatedModel=model;}});
  const geminiQuestions=parseQuestions(geminiText);
  if(geminiQuestions)return res.json({questions:geminiQuestions,generatedBy:'gemini',subject,model:generatedModel});
- if(geminiText&&!geminiQuestions)geminiFailure={kind:'invalid_json'};
+ if(geminiText&&!geminiQuestions)geminiFailure={kind:'invalid_response'};
  console.warn('Gemini practice generation failed validation or returned no content',geminiFailure?.kind||'unknown');
  if(!process.env.GEMINI_API_KEY)return fail(res,503,'Gemini is not configured. Add GEMINI_API_KEY to the Vercel production environment.');
  let message='Gemini returned a response that did not contain a valid '+count+'-question set. Please retry.';
@@ -225,7 +230,7 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
  else if(geminiFailure?.kind==='http'&&geminiFailure.status>=500)message='Gemini is temporarily unavailable. Please retry shortly.';
  else if(geminiFailure?.kind==='timeout')message='Gemini took too long to generate the practice set. Please retry.';
  else if(geminiFailure?.kind==='network')message='GetLearny could not reach Gemini. Check the API deployment network and retry.';
- else if(geminiFailure?.kind==='invalid_json')message='Gemini responded, but its questions did not match the required format. Please retry.';
+ else if(geminiFailure?.kind==='invalid_json'||geminiFailure?.kind==='invalid_response')message='Gemini could not return questions in the required format after trying the available models. Please retry.';
  return fail(res,502,message+' No sample questions were substituted.');
 }));
 const lessonInput=z.object({subject:z.string().trim().min(1).max(100),topic:z.string().trim().min(1).max(200),level:z.string().max(30).default('SHS 3'),exam:z.string().max(30).default('WASSCE')});
