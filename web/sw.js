@@ -1,11 +1,11 @@
-const CACHE_NAME='getlearny-shell-v9';
+const CACHE_NAME='getlearny-shell-v10';
 const SHELL_ASSETS=[
  '/',
  '/index.html',
  '/styles.css?v=20261019-5',
  '/focus.css?v=20261019-3',
  '/revision.css?v=20261019-4',
- '/app.js?v=20261019-5',
+ '/app.js?v=20261020-1',
  '/focus.js?v=20261019-3',
  '/revision.js?v=20261019-4',
  '/manifest.json',
