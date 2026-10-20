@@ -32,8 +32,10 @@ export async function generateWithGemini({system,user,maxOutputTokens=1500,tempe
  const apiKey=process.env.GEMINI_API_KEY;
  if(!apiKey){console.warn('Gemini is not configured: GEMINI_API_KEY is missing');onFailure?.({kind:'missing_key'});return null;}
  const primaryModel=process.env.GEMINI_MODEL||'gemini-3.8-flash';
- const configuredFallbacks=(process.env.GEMINI_FALLBACK_MODELS||'gemini-3.6-flash,gemini-3.5-flash-lite').split(',').map(value=>value.trim()).filter(Boolean);
- const models=[...new Set([primaryModel,...configuredFallbacks])].slice(0,3);
+ const configuredFallbacks=(process.env.GEMINI_FALLBACK_MODELS||'').split(',').map(value=>value.trim()).filter(Boolean);
+ // Keep three supported text-generation models available, even if an environment
+ // override only supplies one fallback.
+ const models=[...new Set([primaryModel,...configuredFallbacks,'gemini-3.6-flash','gemini-3.5-flash-lite'])].slice(0,3);
  const deadline=Date.now()+timeoutMs;
  let lastFailure=null;
  for(let index=0;index<models.length;index++){
@@ -64,7 +66,7 @@ export async function generateWithGemini({system,user,maxOutputTokens=1500,tempe
     console.warn('Gemini request failed: HTTP',response.status,'model',model,detail);
     // Retry only transient errors. Invalid keys, permissions and malformed requests
     // should fail quickly instead of repeatedly hitting the provider.
-    if([404,408,429,500,502,503,504].includes(response.status)&&index<models.length-1)continue;
+    if([403,404,408,429,500,502,503,504].includes(response.status)&&index<models.length-1)continue;
     break;
    }
    const data=await response.json();
@@ -270,10 +272,16 @@ app.post('/api/v1/tutor/chat',auth,asyncRoute(async(req,res)=>{
  const context={learner:{name:learner.name,class_level:learner.class_level||'Not specified',subjects:learner.subjects||[]},focus_subject:subject||'All subjects',progress:dashboard.rows[0]||{},recent_learning:subjectLogs.map(x=>({subject:x.subject,topic:x.topic,status:x.status,minutes:x.minutes_spent,notes:x.notes,at:x.created_at})),recent_tests:subjectTests,journal:journal.rows.map(x=>({learned:x.learned,difficult:x.difficult,next_step:x.next_step,at:x.created_at})),study_materials:materials,available_materials:docs.rows.map(d=>({file:d.original_name,subject:d.subject_name,status:d.processing_status})).slice(0,20)};
  const system='You are GetLearny Tutor, a thoughtful, encouraging Ghana SHS/Form 3 learning coach supporting WASSCE preparation. Be clear, specific, and interactive. Adapt explanations to the learner level. Use the learner’s own study materials when provided and relevant; clearly say if the notes do not support a claim. Connect answers to their recent lessons, test results, and journal only when useful. If test history shows a weak area, suggest a focused next step without shaming the learner. For academic questions, explain the idea, show a worked example when appropriate, then give one small check-for-understanding question. For direct questions answer directly first. Never claim to have read a file unless its extracted text is included. Do not fabricate learner records, scores, sources, or syllabus requirements. Use concise Markdown. Do not reveal private context unrelated to the question.';
  const userPrompt='LEARNER CONTEXT (account-scoped, may contain empty lists):\n'+JSON.stringify(context)+'\n\nRECENT CONVERSATION:\n'+JSON.stringify(history.slice(-10))+'\n\nCURRENT QUESTION:\n'+question;
- const answer=await generateWithGemini({system,user:userPrompt,temperature:0.35,maxOutputTokens:1700,timeoutMs:22000});
- if(answer)return res.json({answer,generatedBy:'gemini',model:process.env.GEMINI_MODEL||'configured Gemini model',context_sources:[...(materials.length?['study files']:[]),...(subjectLogs.length?['learning logs']:[]),...(subjectTests.length?['test results']:[]),...(journal.rows.length?['learning journal']:[]),'learning profile'],context_summary:materials.length+' readable file(s), '+subjectLogs.length+' learning log(s), '+subjectTests.length+' test result(s) checked'});
+ let tutorFailure=null;
+ let successfulModel=process.env.GEMINI_MODEL||'gemini-3.8-flash';
+ const answer=await generateWithGemini({system,user:userPrompt,temperature:0.35,maxOutputTokens:1700,timeoutMs:24000,onFailure:failure=>{tutorFailure=failure;},onModel:model=>{successfulModel=model;}});
+ if(answer)return res.json({answer,generatedBy:'gemini',model:successfulModel,context_sources:[...(materials.length?['study files']:[]),...(subjectLogs.length?['learning logs']:[]),...(subjectTests.length?['test results']:[]),...(journal.rows.length?['learning journal']:[]),'learning profile'],context_summary:materials.length+' readable file(s), '+subjectLogs.length+' learning log(s), '+subjectTests.length+' test result(s) checked'});
  if(!process.env.GEMINI_API_KEY)return fail(res,503,'Gemini is not configured. Add GEMINI_API_KEY to the API deployment.');
- return fail(res,502,'The AI tutor could not generate a response. Check Gemini model access, API quota and server logs, then retry. No answer was fabricated.');
+ if(tutorFailure?.kind==='timeout')return fail(res,504,'The AI tutor timed out while trying three Gemini models. Please retry in a moment or check Gemini API availability and quota. Your saved progress and notes are unchanged.');
+ if(tutorFailure?.status===429)return fail(res,429,'Gemini API quota or rate limit reached across the available models. Please wait and retry. Your saved progress and notes are unchanged.');
+ if(tutorFailure?.status===403)return fail(res,502,'Gemini access was denied for the configured API key or models. Check the key permissions and model access in the API deployment. Your saved progress and notes are unchanged.');
+ if(tutorFailure?.status===404)return fail(res,502,'None of the configured Gemini model names was available to this API key. Check GEMINI_MODEL and GEMINI_FALLBACK_MODELS in the API deployment. Your saved progress and notes are unchanged.');
+ return fail(res,502,'The AI tutor could not generate a response after trying the available Gemini models. Check Gemini model access, API quota and server logs, then retry. No answer was fabricated. Your saved progress and notes are unchanged.');
 }));
 
 const TEXT_MATERIAL_EXTENSIONS=new Set(['.txt','.md','.markdown','.csv','.json']);
