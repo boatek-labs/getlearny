@@ -29,4 +29,5 @@ jobs:
         run: |
           node --check '[...path].js'
           node --check ../web/app.js
+          node --check ../web/sw.js
           node -e "JSON.parse(require('node:fs').readFileSync('../vercel.json', 'utf8'))"
