@@ -67,11 +67,11 @@ In the Android app, open a subject while online and choose **Download next 3 les
 - Registration/login with hashed passwords and expiring JWTs
 - User-scoped learning logs, test results, and journal entries
 - PostgreSQL migration runner with migration history
-- PDF/plain-text upload with selectable-text extraction and document AI tutoring (scanned-PDF OCR still needs an OCR provider)
+- PDF/plain-text/image uploads with selectable-text extraction, Tesseract OCR for images, and Gemini multimodal OCR fallback for scanned PDFs up to 6 MB; OCR results should still be reviewed for accuracy
 - Responsive browser app and Flutter client using the hosted API by default
 
 ## Production checklist
-Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, email verification and password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Google OAuth, OCR, push notifications, and Play Store signing require real provider credentials and are not faked by this starter.
+Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, email verification and password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Google OAuth, email verification, password reset, background web push, and stable Android release signing still require their real provider credentials/configuration. Image OCR is local via Tesseract; scanned-PDF OCR uses Gemini where supported.
 
 ## Gemini AI environment template
 
@@ -80,6 +80,8 @@ Configure these variables in Vercel (Production, Preview, and Development as app
 ```dotenv
 GEMINI_API_KEY=your-gemini-api-key
 GEMINI_MODEL=gemini-3.8-flash
+# Optional comma-separated fallback models; defaults to gemini-3.6-flash,gemini-3.5-flash-lite
+GEMINI_FALLBACK_MODELS=gemini-3.6-flash,gemini-3.5-flash-lite
 ```
 
 The Gemini API key must only be read by the server. Never place it in browser JavaScript or Flutter app configuration. Check Google's official Gemini API model documentation for supported model IDs and availability.
