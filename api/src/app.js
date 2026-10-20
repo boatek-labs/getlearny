@@ -28,18 +28,24 @@ app.use(express.json({limit:'1mb'})); app.use(morgan(process.env.NODE_ENV==='pro
 app.use('/api/v1/auth',rateLimit({windowMs:15*60*1000,limit:30,standardHeaders:true,legacyHeaders:false}));
 app.use('/api/v1',rateLimit({windowMs:60*1000,limit:120,standardHeaders:true,legacyHeaders:false}));
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
-async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false,timeoutMs=15000}){
+async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=0.4,json=false,timeoutMs=15000,onFailure}){
  const apiKey=process.env.GEMINI_API_KEY;
- if(!apiKey){console.warn('Gemini is not configured: GEMINI_API_KEY is missing');return null;}
+ if(!apiKey){console.warn('Gemini is not configured: GEMINI_API_KEY is missing');onFailure?.({kind:'missing_key'});return null;}
  const model=process.env.GEMINI_MODEL||'gemini-3.8-flash';
  try{
+  // Gemini 3.x/4.x reject legacy sampling parameters such as temperature.
+  // Use a low thinking level for interactive learning tasks to keep responses
+  // fast and leave the output-token budget available for the requested content.
+  const generationConfig={maxOutputTokens,...(json?{responseMimeType:'application/json'}:{})};
+  if(/^gemini-(?:3|4)(?:[.-])/i.test(model))generationConfig.thinkingConfig={thinkingLevel:'low'};
+  else generationConfig.temperature=temperature;
   const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
    method:'POST',
    headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
    body:JSON.stringify({
     systemInstruction:{parts:[{text:system}]},
     contents:[{role:'user',parts:Array.isArray(user)?user:[{text:user}]}],
-    generationConfig:{temperature,maxOutputTokens,...(json?{responseMimeType:'application/json'}:{})}
+    generationConfig
    }),
    signal:AbortSignal.timeout(timeoutMs)
   });
@@ -47,13 +53,23 @@ async function generateWithGemini({system,user,maxOutputTokens=1500,temperature=
    let detail='';
    try{const errorData=await response.json();detail=String(errorData.error?.message||'').slice(0,240)}catch{}
    console.warn('Gemini request failed: HTTP',response.status,detail);
+   onFailure?.({kind:'http',status:response.status,detail});
    return null;
   }
   const data=await response.json();
   const text=(data.candidates?.[0]?.content?.parts||[]).map(part=>part.text||'').join('').trim();
-  if(!text)console.warn('Gemini returned no text',data.promptFeedback?.blockReason||data.candidates?.[0]?.finishReason||'no finish reason');
+  if(!text){
+   const reason=data.promptFeedback?.blockReason||data.candidates?.[0]?.finishReason||'no finish reason';
+   console.warn('Gemini returned no text',reason);
+   onFailure?.({kind:'empty',reason:String(reason)});
+  }
   return text||null;
- }catch(error){console.warn('Gemini request failed:',error?.name||'request error');return null;}
+ }catch(error){
+  const kind=error?.name==='TimeoutError'||error?.name==='AbortError'?'timeout':'network';
+  console.warn('Gemini request failed:',error?.name||'request error');
+  onFailure?.({kind});
+  return null;
+ }
 }
 const fail=(res,status,error)=>res.status(status).json({error});
 const envReady=()=>Boolean(process.env.JWT_SECRET&&process.env.JWT_SECRET.length>=32);
@@ -176,12 +192,22 @@ app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
   }
   return questions.length===count?questions:null;
  }
- const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:5200,json:true,temperature:0.2,timeoutMs:18000});
+ let geminiFailure=null;
+ const geminiText=await generateWithGemini({system,user:prompt,maxOutputTokens:6000,json:true,temperature:0.2,timeoutMs:24000,onFailure:failure=>{geminiFailure=failure;}});
  const geminiQuestions=parseQuestions(geminiText);
  if(geminiQuestions)return res.json({questions:geminiQuestions,generatedBy:'gemini',subject,model:process.env.GEMINI_MODEL||'gemini-3.8-flash'});
- console.warn('Gemini practice generation failed validation or returned no content');
+ if(geminiText&&!geminiQuestions)geminiFailure={kind:'invalid_json'};
+ console.warn('Gemini practice generation failed validation or returned no content',geminiFailure?.kind||'unknown');
  if(!process.env.GEMINI_API_KEY)return fail(res,503,'Gemini is not configured. Add GEMINI_API_KEY to the Vercel production environment.');
- return fail(res,502,'Gemini could not generate a valid '+count+'-question practice set. Check the Gemini API key, model access, quota and billing settings, then retry. No sample questions were substituted.');
+ let message='Gemini returned a response that did not contain a valid '+count+'-question set. Please retry.';
+ if(geminiFailure?.kind==='http'&&geminiFailure.status===400)message='Gemini rejected the request configuration. Check the selected model and generation settings, then retry.';
+ else if(geminiFailure?.kind==='http'&&(geminiFailure.status===401||geminiFailure.status===403))message='Gemini rejected the API key or this key does not have access to the selected model. Check the key and model access.';
+ else if(geminiFailure?.kind==='http'&&geminiFailure.status===429)message='Gemini rate limit or quota reached. Check your Gemini API quota and billing, then retry later.';
+ else if(geminiFailure?.kind==='http'&&geminiFailure.status>=500)message='Gemini is temporarily unavailable. Please retry shortly.';
+ else if(geminiFailure?.kind==='timeout')message='Gemini took too long to generate the practice set. Please retry.';
+ else if(geminiFailure?.kind==='network')message='GetLearny could not reach Gemini. Check the API deployment network and retry.';
+ else if(geminiFailure?.kind==='invalid_json')message='Gemini responded, but its questions did not match the required format. Please retry.';
+ return fail(res,502,message+' No sample questions were substituted.');
 }));
 const lessonInput=z.object({subject:z.string().trim().min(1).max(100),topic:z.string().trim().min(1).max(200),level:z.string().max(30).default('SHS 3'),exam:z.string().max(30).default('WASSCE')});
 app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
