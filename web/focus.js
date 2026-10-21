@@ -36,7 +36,7 @@
     try { const key=goalStorageKey(); const saved=localStorage.getItem(key); if(saved && ['120','180','300','420'].includes(saved)) target.value=saved; } catch {}
     target.addEventListener('change', () => { try { localStorage.setItem(goalStorageKey(),target.value); } catch {} refreshGoal(); });
     refreshGoal();
-    $('#focus-length', card).addEventListener('change', () => { if (!session) $('#focus-clock').textContent = format(Number($('#focus-length').value)*60); });
+    $('#focus-length', card)?.addEventListener('change', () => { const length=$('#focus-length',card)?.value;const clock=$('#focus-clock',card);if (!session&&clock)clock.textContent=format(Number(length||25)*60); });
     $('#focus-start', card).addEventListener('click', start);
     $('#focus-pause', card).addEventListener('click', togglePause);
     $('#focus-finish', card).addEventListener('click', finish);
@@ -74,7 +74,7 @@
     const topic = safe($('#focus-topic')?.value).trim();
     if (!topic) { setStatus('Enter the topic you are studying before starting.'); $('#focus-topic')?.focus(); return; }
     if (running) return;
-    if (!session) session={subject:$('#focus-subject').value,topic,length:Number($('#focus-length').value)};
+    if (!session) { const subjectField=$('#focus-subject'),lengthField=$('#focus-length');if(!subjectField||!lengthField){alert('Focus controls are unavailable. Refresh the page and try again.');return;}session={subject:subjectField.value,topic,length:Number(lengthField.value)||25}; }
     startedAt=Date.now(); running=true;
     $('#focus-start').disabled=true; $('#focus-pause').disabled=false; $('#focus-pause').textContent='Pause'; $('#focus-finish').disabled=false;
     $('#focus-subject').disabled=true; $('#focus-topic').disabled=true; $('#focus-length').disabled=true;
