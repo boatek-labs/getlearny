@@ -180,7 +180,7 @@ app.post('/api/v1/practice/grade',auth,asyncRoute(async(req,res)=>{
  const solutionByNumber={};
  const generated=await generateWithGemini({system,user:JSON.stringify(reviewPrompt),temperature:0.2,maxOutputTokens:2200,timeoutMs:14000,json:true,validateResponse:text=>{try{const v=JSON.parse(text);return typeof v.feedback==='string'&&Array.isArray(v.solutions)}catch{return false}}});
  if(generated){try{const parsedAI=JSON.parse(generated);if(typeof parsedAI.feedback==='string'&&parsedAI.feedback.trim())feedback=parsedAI.feedback.slice(0,1200);for(const item of parsedAI.solutions||[]){const n=Number(item.question_number);if(Number.isInteger(n)&&Array.isArray(item.steps))solutionByNumber[n]=item.steps.filter(s=>typeof s==='string'&&s.trim()).slice(0,5).map(s=>s.slice(0,700));}}catch{}}
- const detailedResults=results.map(r=>({...r,steps:solutionByNumber[r.question_number]?.length?solutionByNumber[r.question_number]:(r.explanation?r.explanation.split(/\\n+|(?<=[.!?])\\s+(?=[A-Z0-9])/).filter(s=>s.trim()).slice(0,5):['The answer key identifies “'+r.correct_answer+'” as the correct option, but a worked explanation is not available for this question right now.'])}));
+ const detailedResults=results.map(r=>({...r,steps:solutionByNumber[r.question_number]?.length?solutionByNumber[r.question_number]:(r.explanation?r.explanation.split(/\n+|(?<=[.!?])\s+(?=[A-Z0-9])/).filter(s=>s.trim()).slice(0,5):['The answer key identifies “'+r.correct_answer+'” as the correct option, but a worked explanation is not available for this question right now.'])}));
  res.json({score,max_score:questions.length,results:detailedResults,feedback,ai_review:Boolean(generated)});
 }));
 app.post('/api/v1/practice/generate',auth,asyncRoute(async(req,res)=>{
