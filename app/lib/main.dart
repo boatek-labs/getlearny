@@ -258,6 +258,8 @@ class _TopicListPageState extends State<TopicListPage>{
   OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>OfflineLessonsPage(subject:widget.subject))),icon:const Icon(Icons.library_books_outlined),label:const Text('Open saved lessons')),
   const SizedBox(height:8),
   OutlinedButton.icon(onPressed:uploadingMaterial?null:_uploadSubjectMaterial,icon:uploadingMaterial?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.upload_file_outlined),label:Text(uploadingMaterial?'Uploading and processing…':'Upload subject material · OCR')),
+  const SizedBox(height:8),
+  OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>Scaffold(appBar:AppBar(title:const Text('Study materials')),body:const DocumentsPage()))),icon:const Icon(Icons.folder_open_outlined),label:const Text('View study files and retry OCR')),
   const SizedBox(height:16),
   TextField(controller:topicController,textInputAction:TextInputAction.go,onSubmitted:(value){final topic=value.trim();if(topic.isNotEmpty)Navigator.of(context).push(MaterialPageRoute(builder:(_)=>LessonPage(subject:widget.subject,topic:topic)));},decoration:const InputDecoration(labelText:'Study any topic',hintText:'Type a topic to learn, even if it is not in the catalogue',prefixIcon:Icon(Icons.search))),
   const SizedBox(height:8),
