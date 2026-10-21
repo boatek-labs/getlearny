@@ -309,7 +309,7 @@ async function downloadCloudinaryAsset(url){
  // Some older auto-uploaded PDFs were stored without the raw-file extension.
  // Probe the equivalent .pdf URL as well as image/raw delivery paths before failing.
  for(const candidate of [...candidates]){
-  try{const parsed=new URL(candidate);const tail=parsed.pathname.split('/').pop()||'';if(!/\\.[a-z0-9]{2,8}$/i.test(tail)){const withPdf=new URL(parsed.toString());withPdf.pathname+='.pdf';addCandidate(withPdf.toString());}else if(/\\.pdf$/i.test(tail)){const withoutPdf=new URL(parsed.toString());withoutPdf.pathname=withoutPdf.pathname.replace(/\\.pdf$/i,'');addCandidate(withoutPdf.toString());}}catch{}
+  try{const parsed=new URL(candidate);const tail=parsed.pathname.split('/').pop()||'';if(!/\.[a-z0-9]{2,8}$/i.test(tail)){const withPdf=new URL(parsed.toString());withPdf.pathname+='.pdf';addCandidate(withPdf.toString());}else if(/\.pdf$/i.test(tail)){const withoutPdf=new URL(parsed.toString());withoutPdf.pathname=withoutPdf.pathname.replace(/\.pdf$/i,'');addCandidate(withoutPdf.toString());}}catch{}
  }
  const retrievalDeadline=Date.now()+18000;
  let lastStatus=0,lastContentType='',lastNetworkError='';
