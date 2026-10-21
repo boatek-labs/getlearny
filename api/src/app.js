@@ -356,7 +356,7 @@ app.post('/api/v1/documents/register-cloudinary',auth,asyncRoute(async(req,res)=
  const ext=path.extname(d.original_name).toLowerCase();const textFile=TEXT_MATERIAL_EXTENSIONS.has(ext);let extractedText='',processingStatus='needs_ocr';
  const mimeByExt={'.txt':'text/plain','.md':'text/markdown','.markdown':'text/markdown','.csv':'text/csv','.json':'application/json','.pdf':'application/pdf','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
  const mimeType=mimeByExt[ext]||d.mime_type;
- if(textFile){try{const bytes=await downloadCloudinaryAsset(d.secure_url);extractedText=bytes.toString('utf8').replace(/\\u0000/g,'').trim().slice(0,150000);if(!extractedText)return fail(res,422,'The uploaded text file is empty or contains no readable text.');processingStatus='ready';}catch(error){console.error('Cloudinary text material retrieval failed:',error.message);return fail(res,502,'The text file uploaded, but GetLearny could not read it from Cloudinary: '+error.message);}}
+ if(textFile){try{const bytes=await downloadCloudinaryAsset(d.secure_url);extractedText=bytes.toString('utf8').replace(/\u0000/g,'').trim().slice(0,150000);if(!extractedText)return fail(res,422,'The uploaded text file is empty or contains no readable text.');processingStatus='ready';}catch(error){console.error('Cloudinary text material retrieval failed:',error.message);return fail(res,502,'The text file uploaded, but GetLearny could not read it from Cloudinary: '+error.message);}}
  const title=String(d.material_title||d.original_name).trim();const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,extracted_text,processing_status,subject_name) VALUES($1,$2,$3,$4,$5,NULL,$6,$7,$8) RETURNING id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at',[req.user.sub,path.basename(title).slice(0,255)||path.basename(d.original_name).slice(0,255),d.secure_url,mimeType,d.size_bytes,extractedText,processingStatus,String(d.subject_name||'General').trim().slice(0,120)||'General']);
  res.status(201).json({document:r.rows[0],message:textFile?'Material uploaded and text extracted. The AI tutor can now use this file.':'Material uploaded securely to Cloudinary. Run OCR to extract readable text before asking the AI tutor.'});
 }));
@@ -383,8 +383,8 @@ app.post('/api/v1/documents/:id/ocr',auth,asyncRoute(async(req,res)=>{
  if(!found.rows.length)return fail(res,404,'Study material not found');
  const doc=found.rows[0];let buffer=doc.content;if(!buffer&&doc.storage_path){try{buffer=await downloadCloudinaryAsset(doc.storage_path)}catch(error){console.error('Cloudinary material retrieval failed:',error.message);return fail(res,502,error.message||'Could not retrieve this material from Cloudinary. Try again later.')}}if(!buffer)return fail(res,422,'Original file unavailable. Upload it again.');
  let extractedText='';
- if(TEXT_MATERIAL_EXTENSIONS.has(path.extname(doc.original_name||'').toLowerCase())){
-  extractedText=buffer.toString('utf8').replace(/\\u0000/g,'').trim().slice(0,150000);
+ if((TEXT_MATERIAL_EXTENSIONS.has(path.extname(doc.original_name||'').toLowerCase())||(TEXT_MATERIAL_MIMES.has(doc.mime_type)&&doc.mime_type!=='application/octet-stream'))){
+  extractedText=buffer.toString('utf8').replace(/\u0000/g,'').trim().slice(0,150000);
  }else if(OCR_IMAGE_MIMES.has(doc.mime_type)){
   let worker;
   try{worker=await createWorker('eng');const result=await worker.recognize(buffer);extractedText=String(result.data?.text||'').trim().slice(0,150000);}
