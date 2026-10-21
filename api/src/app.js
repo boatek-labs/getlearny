@@ -292,7 +292,7 @@ app.post('/api/v1/tutor/chat',auth,asyncRoute(async(req,res)=>{
  const answer=await generateWithGemini({system,user:userPrompt,temperature:0.35,maxOutputTokens:1700,timeoutMs:24000,onFailure:failure=>{tutorFailure=failure;},onModel:model=>{successfulModel=model;}});
  if(answer){
   const conversationId=conversation_id||randomUUID();
-  const savedMessages=[...history.slice(-10),{role:'user',content:question},{role:'assistant',content:answer}].slice(-80);
+  const savedMessages=[...history.slice(-78),{role:'user',content:question},{role:'assistant',content:answer}].slice(-80);
   const title=String(savedMessages.find(m=>m.role==='user')?.content||'New chat').trim().slice(0,100)||'New chat';
   await query(`INSERT INTO tutor_conversations(id,user_id,title,messages,updated_at) VALUES($1,$2,$3,$4::jsonb,now())
    ON CONFLICT(id) DO UPDATE SET title=CASE WHEN tutor_conversations.title='New chat' THEN EXCLUDED.title ELSE tutor_conversations.title END,messages=EXCLUDED.messages,updated_at=now()
