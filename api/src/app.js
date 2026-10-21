@@ -255,11 +255,22 @@ app.post('/api/v1/lessons/generate',auth,asyncRoute(async(req,res)=>{
 }));
 
 
+// Saved tutor conversations are private to the authenticated learner.
+app.get('/api/v1/tutor/chats',auth,asyncRoute(async(req,res)=>{
+ const result=await query('SELECT id,title,created_at,updated_at,jsonb_array_length(messages) AS message_count FROM tutor_conversations WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 50',[req.user.sub]);
+ res.json({chats:result.rows});
+}));
+app.get('/api/v1/tutor/chats/:id',auth,asyncRoute(async(req,res)=>{
+ const result=await query('SELECT id,title,messages,created_at,updated_at FROM tutor_conversations WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);
+ if(!result.rowCount)return fail(res,404,'Saved tutor chat not found');
+ res.json({chat:result.rows[0]});
+}));
+
 // Personal tutor endpoint. Context is loaded server-side and scoped to the signed-in learner.
-const tutorChatInput=z.object({question:z.string().trim().min(2).max(4000),subject:z.string().trim().max(100).optional().default(''),use_materials:z.boolean().optional().default(true),history:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().max(4000)})).max(12).optional().default([])});
+const tutorChatInput=z.object({question:z.string().trim().min(2).max(4000),subject:z.string().trim().max(100).optional().default(''),use_materials:z.boolean().optional().default(true),history:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().max(4000)})).max(12).optional().default([]),conversation_id:z.string().uuid().optional().nullable()});
 app.post('/api/v1/tutor/chat',auth,asyncRoute(async(req,res)=>{
  const parsed=tutorChatInput.safeParse(req.body);if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
- const {question,subject,use_materials,history}=parsed.data;
+ const {question,subject,use_materials,history,conversation_id}=parsed.data;
  const [profile,logs,tests,journal,docs,dashboard]=await Promise.all([
   query('SELECT name,class_level,subjects FROM users WHERE id=$1',[req.user.sub]),
   query('SELECT subject,topic,minutes_spent,status,notes,created_at FROM learning_logs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 12',[req.user.sub]),
@@ -279,7 +290,16 @@ app.post('/api/v1/tutor/chat',auth,asyncRoute(async(req,res)=>{
  let tutorFailure=null;
  let successfulModel=process.env.GEMINI_MODEL||'gemini-3.8-flash';
  const answer=await generateWithGemini({system,user:userPrompt,temperature:0.35,maxOutputTokens:1700,timeoutMs:24000,onFailure:failure=>{tutorFailure=failure;},onModel:model=>{successfulModel=model;}});
- if(answer)return res.json({answer,generatedBy:'gemini',model:successfulModel,context_sources:[...(materials.length?['study files']:[]),...(subjectLogs.length?['learning logs']:[]),...(subjectTests.length?['test results']:[]),...(journal.rows.length?['learning journal']:[]),'learning profile'],context_summary:materials.length+' readable file(s), '+subjectLogs.length+' learning log(s), '+subjectTests.length+' test result(s) checked'});
+ if(answer){
+  const conversationId=conversation_id||randomUUID();
+  const savedMessages=[...history.slice(-10),{role:'user',content:question},{role:'assistant',content:answer}].slice(-80);
+  const title=String(savedMessages.find(m=>m.role==='user')?.content||'New chat').trim().slice(0,100)||'New chat';
+  await query(`INSERT INTO tutor_conversations(id,user_id,title,messages,updated_at) VALUES($1,$2,$3,$4::jsonb,now())
+   ON CONFLICT(id) DO UPDATE SET title=CASE WHEN tutor_conversations.title='New chat' THEN EXCLUDED.title ELSE tutor_conversations.title END,messages=EXCLUDED.messages,updated_at=now()
+   WHERE tutor_conversations.user_id=EXCLUDED.user_id`,
+   [conversationId,req.user.sub,title,JSON.stringify(savedMessages)]);
+  return res.json({answer,conversation_id:conversationId,generatedBy:'gemini',model:successfulModel,context_sources:[...(materials.length?['study files']:[]),...(subjectLogs.length?['learning logs']:[]),...(subjectTests.length?['test results']:[]),...(journal.rows.length?['learning journal']:[]),'learning profile'],context_summary:materials.length+' readable file(s), '+subjectLogs.length+' learning log(s), '+subjectTests.length+' test result(s) checked'});
+ }
  if(!process.env.GEMINI_API_KEY)return fail(res,503,'Gemini is not configured. Add GEMINI_API_KEY to the API deployment.');
  if(tutorFailure?.kind==='timeout')return fail(res,504,'The AI tutor timed out while trying three Gemini models. Please retry in a moment or check Gemini API availability and quota. Your saved progress and notes are unchanged.');
  if(tutorFailure?.status===429)return fail(res,429,'Gemini API quota or rate limit reached across the available models. Please wait and retry. Your saved progress and notes are unchanged.');
