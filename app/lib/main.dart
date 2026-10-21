@@ -29,9 +29,9 @@ class AnimatedSplashGate extends StatefulWidget {
   @override State<AnimatedSplashGate> createState() => _AnimatedSplashGateState();
 }
 class _AnimatedSplashGateState extends State<AnimatedSplashGate> with TickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(vsync:this,duration:const Duration(milliseconds:1250))..repeat(reverse:true);
+  late final AnimationController _pulse = AnimationController(vsync:this,duration:const Duration(milliseconds:1500));
   bool _finished=false;
-  @override void initState(){super.initState();Future<void>.delayed(const Duration(milliseconds:2100),(){if(mounted)setState(()=>_finished=true);});}
+  @override void initState(){super.initState();_pulse.addStatusListener((status){if(status==AnimationStatus.completed&&mounted)setState(()=>_finished=true);});_pulse.forward();}
   @override void dispose(){_pulse.dispose();super.dispose();}
   @override Widget build(BuildContext context){
     if(_finished)return const Shell();
