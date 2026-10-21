@@ -519,3 +519,28 @@ html[data-theme="dark"] .from-user .message-avatar{background:#25263b;color:#d4c
 @media(max-width:900px){.tutor-layout{grid-template-columns:1fr}.tutor-side{grid-template-columns:1fr 1fr;align-items:start}.tutor-chat-card{min-height:600px}.tutor-orb{flex-basis:120px;width:120px;height:120px}.orb-core{width:62px;height:62px;border-radius:21px}}
 @media(max-width:600px){#view-tutor .tutor-hero{padding:22px;min-height:0;border-radius:21px}.tutor-hero h1{font-size:30px}.tutor-hero p{font-size:12px}.tutor-orb{display:none}.tutor-hero-pills span{font-size:9px}.tutor-layout{gap:12px;margin-top:12px}.tutor-side{grid-template-columns:1fr}.tutor-context-card,.tutor-shortcuts{padding:15px}.tutor-chat-card{min-height:620px;border-radius:18px}.tutor-chat-head{padding:13px}.tutor-controls{padding:11px 13px;gap:11px}.tutor-controls>label:first-child{flex-basis:100%}.tutor-messages{padding:17px 13px;min-height:340px}.tutor-prompt-grid{grid-template-columns:1fr}.tutor-prompt-grid button{padding:12px}.tutor-composer{margin:0 9px 10px;padding:8px}.tutor-composer-foot>span{max-width:55%}.tutor-chat-head .text-button{font-size:10px}.tutor-hero-pills{gap:6px}}
 @media(prefers-reduced-motion:reduce){.tutor-thinking i{animation:none}.tutor-prompt-grid button{transition:none}}
+
+/* Floating tutor bubbles and gentle message entrance */
+.tutor-orb{isolation:isolate}
+.orb-core{animation:tutorCoreFloat 4.8s ease-in-out infinite;position:relative;z-index:1}
+.orb-ring.ring-a{animation:tutorRingOrbit 12s linear infinite}
+.orb-ring.ring-b{animation:tutorRingOrbitReverse 16s linear infinite}
+.orb-dot{animation:tutorBubbleFloat 3.4s ease-in-out infinite;will-change:transform}
+.orb-dot.dot-b{animation-delay:-1.7s}
+.tutor-hero:before,.tutor-hero:after{content:"";position:absolute;pointer-events:none;border-radius:50%;border:1px solid rgba(129,112,255,.2);background:radial-gradient(circle at 35% 30%,rgba(168,231,255,.25),rgba(129,112,255,.06) 65%,transparent 70%);animation:tutorAmbientBubble 8s ease-in-out infinite}
+.tutor-hero:before{width:44px;height:44px;right:29%;top:17%;animation-delay:-2.4s}
+.tutor-hero:after{width:22px;height:22px;right:17%;bottom:12%;animation-delay:-5.1s}
+.tutor-message{animation:tutorMessageArrive .36s cubic-bezier(.2,.75,.25,1) both}
+.tutor-message.from-user .message-content{border-radius:4px 15px 15px 15px}
+.tutor-message.from-ai .message-content{animation:tutorBubbleAppear .45s ease-out both}
+.tutor-message .message-avatar{animation:tutorAvatarPop .4s ease-out both}
+@keyframes tutorCoreFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-7px) rotate(2deg)}}
+@keyframes tutorBubbleFloat{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(3px,-10px,0) scale(1.12)}}
+@keyframes tutorRingOrbit{from{transform:rotate(-25deg) scaleY(.65)}to{transform:rotate(335deg) scaleY(.65)}}
+@keyframes tutorRingOrbitReverse{from{transform:rotate(55deg) scaleY(.7)}to{transform:rotate(-305deg) scaleY(.7)}}
+@keyframes tutorAmbientBubble{0%,100%{transform:translate3d(0,0,0) scale(.9);opacity:.4}50%{transform:translate3d(-12px,-15px,0) scale(1.12);opacity:.9}}
+@keyframes tutorMessageArrive{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+@keyframes tutorBubbleAppear{from{opacity:.65;transform:scale(.985)}to{opacity:1;transform:scale(1)}}
+@keyframes tutorAvatarPop{from{transform:scale(.82)}to{transform:scale(1)}}
+@media(max-width:600px){.tutor-hero:before{right:10%;top:10%;width:28px;height:28px}.tutor-hero:after{right:6%;bottom:8%}}
+@media(prefers-reduced-motion:reduce){.orb-core,.orb-ring,.orb-dot,.tutor-hero:before,.tutor-hero:after,.tutor-message,.tutor-message.from-ai .message-content,.tutor-message .message-avatar{animation:none!important;will-change:auto}}
