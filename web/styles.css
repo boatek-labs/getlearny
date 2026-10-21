@@ -544,3 +544,21 @@ html[data-theme="dark"] .from-user .message-avatar{background:#25263b;color:#d4c
 @keyframes tutorAvatarPop{from{transform:scale(.82)}to{transform:scale(1)}}
 @media(max-width:600px){.tutor-hero:before{right:10%;top:10%;width:28px;height:28px}.tutor-hero:after{right:6%;bottom:8%}}
 @media(prefers-reduced-motion:reduce){.orb-core,.orb-ring,.orb-dot,.tutor-hero:before,.tutor-hero:after,.tutor-message,.tutor-message.from-ai .message-content,.tutor-message .message-avatar{animation:none!important;will-change:auto}}
+
+/* Tutor history, answer formatting and mathematical notation */
+.tutor-recent-card{margin-top:14px;padding:17px;border:1px solid var(--line);border-radius:20px;background:var(--surface)}
+.tutor-recent-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.tutor-recent-head h3{font-size:14px;margin:0}.tutor-recent-head p{font-size:11px;color:var(--muted);margin:4px 0 0}
+.tutor-saved-chats{display:grid;gap:6px;max-height:280px;overflow:auto}
+.tutor-saved-chat{display:flex;align-items:center;gap:10px;width:100%;padding:10px;border:1px solid transparent;border-radius:12px;background:transparent;text-align:left;color:var(--text);cursor:pointer}
+.tutor-saved-chat:hover,.tutor-saved-chat.active{background:var(--surface-soft);border-color:var(--line)}
+.tutor-saved-chat>span:nth-child(2){display:grid;gap:4px;min-width:0}.tutor-saved-chat b{font-size:12px;overflow-wrap:anywhere}.tutor-saved-chat small,.tutor-saved-empty{font-size:11px;color:var(--muted);line-height:1.45}
+.saved-chat-icon{display:grid;place-items:center;width:32px;height:32px;flex:0 0 32px;border-radius:10px;background:var(--surface-soft)}
+.message-content h2,.message-content h3,.lesson-panel h2,.lesson-panel h3{line-height:1.35;margin:18px 0 8px}
+.message-content p,.lesson-panel p{margin:8px 0;line-height:1.7}
+.message-content ul,.message-content ol,.lesson-panel ul,.lesson-panel ol{padding-left:24px;margin:8px 0 14px}
+.message-content li,.lesson-panel li{padding-left:3px;margin:5px 0;line-height:1.65}
+.message-content u,.lesson-panel u{text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px}
+.tutor-math{overflow-x:auto;margin:12px 0;padding:12px 14px;border-radius:12px;background:var(--surface-soft);font-family:ui-monospace,SFMono-Regular,monospace;white-space:pre-wrap}
+.tutor-math-inline{font-family:ui-monospace,SFMono-Regular,monospace;padding:1px 4px;border-radius:4px;background:var(--surface-soft)}
+@media(max-width:760px){.tutor-recent-card{margin-top:12px}.tutor-saved-chats{max-height:190px}.tutor-layout{gap:12px}}
