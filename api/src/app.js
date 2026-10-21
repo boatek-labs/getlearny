@@ -295,22 +295,38 @@ function validCloudinaryUrl(value){try{const url=new URL(value);return url.proto
 async function downloadCloudinaryAsset(url){
  if(!validCloudinaryUrl(url))throw new Error('Stored Cloudinary asset URL is invalid');
  const candidates=[url];
- if(url.includes('/image/upload/')&&!url.includes('/fl_attachment/'))candidates.push(url.replace('/image/upload/','/image/upload/fl_attachment/'));
- let lastStatus=0;
+ const addCandidate=value=>{if(value&&!candidates.includes(value))candidates.push(value)};
+ if(url.includes('/image/upload/')){
+  addCandidate(url.replace('/image/upload/','/image/upload/fl_attachment/'));
+  // Cloudinary may store a PDF as an image resource; try its raw delivery route too.
+  addCandidate(url.replace('/image/upload/','/raw/upload/'));
+  addCandidate(url.replace('/image/upload/','/raw/upload/fl_attachment/'));
+ }else if(url.includes('/raw/upload/')){
+  addCandidate(url.replace('/raw/upload/','/raw/upload/fl_attachment/'));
+  addCandidate(url.replace('/raw/upload/','/image/upload/'));
+  addCandidate(url.replace('/raw/upload/','/image/upload/fl_attachment/'));
+ }
+ let lastStatus=0,lastContentType='',lastNetworkError='';
  for(const candidate of candidates){
   try{
    const response=await fetch(candidate,{signal:AbortSignal.timeout(45000),redirect:'follow',headers:{'Accept':'application/pdf,image/*,application/octet-stream,*/*','User-Agent':'GetLearny-Study-Material-Processor/1.0'}});
    if(!response.ok){lastStatus=response.status;continue;}
-   const type=(response.headers.get('content-type')||'').toLowerCase();
+   const type=(response.headers.get('content-type')||'').toLowerCase();lastContentType=type;
    if(type.includes('text/html')){lastStatus=response.status||502;continue;}
    const bytes=Buffer.from(await response.arrayBuffer());
    if(!bytes.length)throw new Error('Cloudinary returned an empty file');
    if(bytes.length>100*1024*1024)throw new Error('The stored material exceeds the 100 MB processing limit');
    return bytes;
-  }catch(error){if(error?.name==='AbortError'||error?.name==='TimeoutError')throw new Error('Cloudinary file retrieval timed out. Check the asset delivery settings and retry.');if(error.message==='Cloudinary returned an empty file'||error.message.includes('exceeds the 100 MB'))throw error;}
+  }catch(error){
+   if(error?.name==='AbortError'||error?.name==='TimeoutError')throw new Error('Cloudinary file retrieval timed out after 45 seconds. Check Cloudinary availability and retry.');
+   if(error.message==='Cloudinary returned an empty file'||error.message.includes('exceeds the 100 MB'))throw error;
+   lastNetworkError=error.message||'Network error';
+  }
  }
- if(lastStatus===401||lastStatus===403||lastStatus===404)throw new Error('Cloudinary could not deliver this file (HTTP '+lastStatus+'). Check that PDF/raw-file delivery is allowed for this asset in Cloudinary, then retry OCR.');
- throw new Error('Cloudinary could not retrieve the stored file. Check its delivery URL and Cloudinary account availability, then retry OCR.');
+ if(lastStatus===401||lastStatus===403)throw new Error('Cloudinary denied access to this file (HTTP '+lastStatus+'). In Cloudinary, enable PDF delivery for image assets or check the asset access mode, then retry OCR.');
+ if(lastStatus===404)throw new Error('Cloudinary returned HTTP 404 for this file. Its stored delivery URL or resource type may be incorrect; upload the material again.');
+ if(lastStatus)throw new Error('Cloudinary could not deliver this file (HTTP '+lastStatus+(lastContentType?', '+lastContentType:'')+'). Check the Cloudinary asset and retry.');
+ throw new Error('Cloudinary file retrieval failed'+(lastNetworkError?': '+lastNetworkError:'')+'. Check the asset delivery URL and Cloudinary account availability, then retry.');
 }
 const OCR_IMAGE_MIMES=new Set(['image/png','image/jpeg','image/webp']);
 const TEXT_MATERIAL_MIMES=new Set(['text/plain','text/markdown','text/csv','application/json','application/octet-stream']);
@@ -350,7 +366,7 @@ app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res
 app.post('/api/v1/documents/:id/ocr',auth,asyncRoute(async(req,res)=>{
  const found=await query('SELECT id,original_name,mime_type,content,storage_path FROM uploaded_documents WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);
  if(!found.rows.length)return fail(res,404,'Study material not found');
- const doc=found.rows[0];let buffer=doc.content;if(!buffer&&doc.storage_path){try{buffer=await downloadCloudinaryAsset(doc.storage_path)}catch(error){console.error('Cloudinary material retrieval failed:',error.message);return fail(res,502,'Could not retrieve this material from Cloudinary. Try again later.')}}if(!buffer)return fail(res,422,'Original file unavailable. Upload it again.');
+ const doc=found.rows[0];let buffer=doc.content;if(!buffer&&doc.storage_path){try{buffer=await downloadCloudinaryAsset(doc.storage_path)}catch(error){console.error('Cloudinary material retrieval failed:',error.message);return fail(res,502,error.message||'Could not retrieve this material from Cloudinary. Try again later.')}}if(!buffer)return fail(res,422,'Original file unavailable. Upload it again.');
  let extractedText='';
  if(OCR_IMAGE_MIMES.has(doc.mime_type)){
   let worker;
