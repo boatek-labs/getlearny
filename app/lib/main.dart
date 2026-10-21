@@ -207,7 +207,7 @@ class _TopicListPageState extends State<TopicListPage>{
  bool loading=false,downloading=false,uploadingMaterial=false; String error=''; List<Map<String,dynamic>> topics=[];
  final topicController=TextEditingController();
  @override void dispose(){topicController.dispose();super.dispose();}
- String get code=>({'Mathematics':'MATH','Core Mathematics':'MATH','English':'ENG','English Language':'ENG','Chemistry':'CHEM','Biology':'BIO','Integrated Science':'SCI','Social Studies':'SOC','Add Math':'EMATH','Additional Mathematics':'EMATH','Elective Mathematics':'EMATH','Computer Science':'CS','ICT':'ICT'}[widget.subject]??widget.subject.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9_-]'),''));
+ String get code=>({'Mathematics':'MATH','Maths':'MATH','Math':'MATH','Core Mathematics':'MATH','Core Maths':'MATH','Core Math':'MATH','English':'ENG','English Language':'ENG','Chemistry':'SCI','Biology':'SCI','Integrated Science':'SCI','Social Studies':'SOC','Add Math':'EMATH','Add Maths':'EMATH','Additional Math':'EMATH','Additional Mathematics':'EMATH','Elective Mathematics':'EMATH','Computer Science':'ICT','Computer Studies':'ICT','ICT':'ICT'}[widget.subject]??widget.subject.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9_-]'),''));
  @override void initState(){super.initState();_loadTopics();}
  Future<void> _loadTopics()async{
   await OfflineLessonStore.refresh();
