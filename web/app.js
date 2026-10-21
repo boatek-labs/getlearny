@@ -110,14 +110,16 @@ function renderDocuments(rows){
 }
 async function uploadStudyMaterialToCloudinary(file,subjectName,materialTitle,onStatus){
  if(file.size>100*1024*1024)throw new Error('Choose a file smaller than 100 MB.');
+ const ext=(file.name.split('.').pop()||'').toLowerCase();
  onStatus?.('Preparing secure Cloudinary upload…');
- const signed=await api('/documents/upload-signature',{method:'POST',body:JSON.stringify({})});
+ const signed=await api('/documents/upload-signature',{method:'POST',body:JSON.stringify({extension:ext})});
  const body=new FormData();body.append('file',file);body.append('api_key',signed.api_key);body.append('timestamp',String(signed.timestamp));body.append('folder',signed.folder);body.append('public_id',signed.public_id);body.append('signature',signed.signature);
  onStatus?.('Uploading directly to Cloudinary…');
- const response=await fetch('https://api.cloudinary.com/v1_1/'+encodeURIComponent(signed.cloud_name)+'/auto/upload',{method:'POST',body});
+ const response=await fetch('https://api.cloudinary.com/v1_1/'+encodeURIComponent(signed.cloud_name)+'/'+encodeURIComponent(signed.resource_type)+'/upload',{method:'POST',body});
  const asset=await response.json().catch(()=>({}));if(!response.ok)throw new Error(asset.error?.message||'Cloudinary could not upload this file. Check the Cloudinary account limits and configuration.');
  onStatus?.('Saving material details…');
- return api('/documents/register-cloudinary',{method:'POST',body:JSON.stringify({secure_url:asset.secure_url,public_id:asset.public_id,original_name:file.name,mime_type:file.type||asset.resource_type||'application/octet-stream',size_bytes:file.size,subject_name:subjectName||'General',material_title:materialTitle||file.name})});
+ const mimeByExt={txt:'text/plain',md:'text/markdown',markdown:'text/markdown',csv:'text/csv',json:'application/json',pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp'};
+ return api('/documents/register-cloudinary',{method:'POST',body:JSON.stringify({secure_url:asset.secure_url,public_id:asset.public_id,original_name:file.name,mime_type:file.type||mimeByExt[ext]||'application/octet-stream',size_bytes:file.size,subject_name:subjectName||'General',material_title:materialTitle||file.name})});
 }
 async function loadDocuments(){if(!state.token){$('#document-list').innerHTML='<article class="record"><p>Sign in to upload and access your private study materials.</p><button class="button button-primary" id="document-signin" type="button">Open account</button></article>';const b=$('#document-signin');if(b)b.onclick=()=>showView('profile');return;}try{const r=await api('/documents');renderDocuments(r.documents||[])}catch(e){$('#document-list').innerHTML='<article class="record"><p>'+esc(e.message)+'</p></article>';}}
 
