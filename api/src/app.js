@@ -334,16 +334,23 @@ const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:(Number(pro
 app.post('/api/v1/profile/avatar',auth,avatarUpload.single('file'),asyncRoute(async(req,res)=>{if(!req.file)return fail(res,400,'Choose a JPG, PNG or WebP profile picture');const avatar_data='data:'+req.file.mimetype+';base64,'+req.file.buffer.toString('base64');const r=await query('UPDATE users SET avatar_data=$1,updated_at=now() WHERE id=$2 RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at',[avatar_data,req.user.sub]);res.json({user:r.rows[0],message:'Profile picture updated'})}));
 app.post('/api/v1/documents/upload-signature',auth,asyncRoute(async(req,res)=>{
  const cloud=cloudinaryConfig();if(!cloud)return fail(res,503,'Cloudinary storage is not configured. Add CLOUDINARY_URL to the Vercel production environment.');
- const timestamp=Math.floor(Date.now()/1000);const folder='getlearny/users/'+String(req.user.sub)+'/materials';const public_id=randomUUID();const params={folder,public_id,timestamp};
- res.json({cloud_name:cloud.cloudName,api_key:cloud.apiKey,timestamp,folder,public_id,signature:cloudinarySignature(params,cloud.apiSecret),max_file_mb:100});
+ const ext=String(req.body?.extension||'pdf').trim().toLowerCase().replace(/^\\./,'');
+ if(!['pdf','txt','md','markdown','csv','json','png','jpg','jpeg','webp'].includes(ext))return fail(res,400,'Unsupported study material file extension');
+ const resource_type=['txt','md','markdown','csv','json'].includes(ext)?'raw':'image';
+ const timestamp=Math.floor(Date.now()/1000);const folder='getlearny/users/'+String(req.user.sub)+'/materials';const public_id=randomUUID()+(resource_type==='raw'?'.'+ext:'');const params={folder,public_id,timestamp};
+ res.json({cloud_name:cloud.cloudName,api_key:cloud.apiKey,timestamp,folder,public_id,resource_type,signature:cloudinarySignature(params,cloud.apiSecret),max_file_mb:100});
 }));
 app.post('/api/v1/documents/register-cloudinary',auth,asyncRoute(async(req,res)=>{
  const cloud=cloudinaryConfig();if(!cloud)return fail(res,503,'Cloudinary storage is not configured. Add CLOUDINARY_URL to the Vercel production environment.');
  const schema=z.object({secure_url:z.string().url().max(2048),public_id:z.string().min(1).max(500),original_name:z.string().trim().min(1).max(255),mime_type:z.string().min(1).max(120),size_bytes:z.number().int().positive().max(100*1024*1024),subject_name:z.string().trim().max(120).optional().default('General'),material_title:z.string().trim().max(255).optional()});
  const parsed=schema.safeParse(req.body);if(!parsed.success)return fail(res,400,'Invalid Cloudinary upload details');const d=parsed.data;
  const expectedPrefix='getlearny/users/'+String(req.user.sub)+'/materials/';if(!validCloudinaryUrl(d.secure_url)||!d.public_id.startsWith(expectedPrefix))return fail(res,403,'This Cloudinary file does not belong to your account.');
- const title=String(d.material_title||d.original_name).trim();const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,extracted_text,processing_status,subject_name) VALUES($1,$2,$3,$4,$5,NULL,$6,$7,$8) RETURNING id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at',[req.user.sub,path.basename(title).slice(0,255)||path.basename(d.original_name).slice(0,255),d.secure_url,d.mime_type,d.size_bytes,'','needs_ocr',String(d.subject_name||'General').trim().slice(0,120)||'General']);
- res.status(201).json({document:r.rows[0],message:'Material uploaded securely to Cloudinary. Run OCR to extract readable text before asking the AI tutor.'});
+ const ext=path.extname(d.original_name).toLowerCase();const textFile=TEXT_MATERIAL_EXTENSIONS.has(ext);let extractedText='',processingStatus='needs_ocr';
+ const mimeByExt={'.txt':'text/plain','.md':'text/markdown','.markdown':'text/markdown','.csv':'text/csv','.json':'application/json','.pdf':'application/pdf','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
+ const mimeType=mimeByExt[ext]||d.mime_type;
+ if(textFile){try{const bytes=await downloadCloudinaryAsset(d.secure_url);extractedText=bytes.toString('utf8').replace(/\\u0000/g,'').trim().slice(0,150000);if(!extractedText)return fail(res,422,'The uploaded text file is empty or contains no readable text.');processingStatus='ready';}catch(error){console.error('Cloudinary text material retrieval failed:',error.message);return fail(res,502,'The text file uploaded, but GetLearny could not read it from Cloudinary: '+error.message);}}
+ const title=String(d.material_title||d.original_name).trim();const r=await query('INSERT INTO uploaded_documents(user_id,original_name,storage_path,mime_type,size_bytes,content,extracted_text,processing_status,subject_name) VALUES($1,$2,$3,$4,$5,NULL,$6,$7,$8) RETURNING id,original_name,mime_type,size_bytes,processing_status,subject_name,created_at',[req.user.sub,path.basename(title).slice(0,255)||path.basename(d.original_name).slice(0,255),d.secure_url,mimeType,d.size_bytes,extractedText,processingStatus,String(d.subject_name||'General').trim().slice(0,120)||'General']);
+ res.status(201).json({document:r.rows[0],message:textFile?'Material uploaded and text extracted. The AI tutor can now use this file.':'Material uploaded securely to Cloudinary. Run OCR to extract readable text before asking the AI tutor.'});
 }));
 app.post('/api/v1/documents',auth,upload.single('file'),asyncRoute(async(req,res)=>{
  if(!req.file)return fail(res,400,'Select a supported study material file');
