@@ -311,10 +311,12 @@ async function downloadCloudinaryAsset(url){
  for(const candidate of [...candidates]){
   try{const parsed=new URL(candidate);const tail=parsed.pathname.split('/').pop()||'';if(!/\\.[a-z0-9]{2,8}$/i.test(tail)){const withPdf=new URL(parsed.toString());withPdf.pathname+='.pdf';addCandidate(withPdf.toString());}else if(/\\.pdf$/i.test(tail)){const withoutPdf=new URL(parsed.toString());withoutPdf.pathname=withoutPdf.pathname.replace(/\\.pdf$/i,'');addCandidate(withoutPdf.toString());}}catch{}
  }
+ const retrievalDeadline=Date.now()+18000;
  let lastStatus=0,lastContentType='',lastNetworkError='';
  for(const candidate of candidates){
+  if(Date.now()>=retrievalDeadline)break;
   try{
-   const response=await fetch(candidate,{signal:AbortSignal.timeout(45000),redirect:'follow',headers:{'Accept':'application/pdf,image/*,application/octet-stream,*/*','User-Agent':'GetLearny-Study-Material-Processor/1.0'}});
+   const response=await fetch(candidate,{signal:AbortSignal.timeout(Math.max(1000,Math.min(5000,retrievalDeadline-Date.now()))),redirect:'follow',headers:{'Accept':'application/pdf,image/*,application/octet-stream,*/*','User-Agent':'GetLearny-Study-Material-Processor/1.0'}});
    if(!response.ok){lastStatus=response.status;continue;}
    const type=(response.headers.get('content-type')||'').toLowerCase();lastContentType=type;
    if(type.includes('text/html')){lastStatus=response.status||502;continue;}
@@ -323,11 +325,12 @@ async function downloadCloudinaryAsset(url){
    if(bytes.length>100*1024*1024)throw new Error('The stored material exceeds the 100 MB processing limit');
    return bytes;
   }catch(error){
-   if(error?.name==='AbortError'||error?.name==='TimeoutError')throw new Error('Cloudinary file retrieval timed out after 45 seconds. Check Cloudinary availability and retry.');
+   if(error?.name==='AbortError'||error?.name==='TimeoutError'){lastNetworkError='Cloudinary retrieval attempt timed out';if(Date.now()>=retrievalDeadline)break;continue;}
    if(error.message==='Cloudinary returned an empty file'||error.message.includes('exceeds the 100 MB'))throw error;
    lastNetworkError=error.message||'Network error';
   }
  }
+ if(Date.now()>=retrievalDeadline)throw new Error('Cloudinary file retrieval timed out after 18 seconds. Retry OCR or upload the material again if the error continues.');
  if(lastStatus===401||lastStatus===403)throw new Error('Cloudinary denied access to this file (HTTP '+lastStatus+'). In Cloudinary, enable PDF delivery for image assets or check the asset access mode, then retry OCR.');
  if(lastStatus===404)throw new Error('Cloudinary returned HTTP 404 for this file. Its stored delivery URL or resource type may be incorrect; upload the material again.');
  if(lastStatus)throw new Error('Cloudinary could not deliver this file (HTTP '+lastStatus+(lastContentType?', '+lastContentType:'')+'). Check the Cloudinary asset and retry.');
@@ -393,7 +396,7 @@ app.post('/api/v1/documents/:id/ocr',auth,asyncRoute(async(req,res)=>{
    const transcription=await generateWithGemini({
     system:'Transcribe all visible text from the study PDF faithfully. Preserve headings, formulas and numbering. Do not summarize or invent text. Return only transcription.',
     user:[{text:'OCR this scanned study PDF.'},{inlineData:{mimeType:'application/pdf',data:buffer.toString('base64')}}],
-    temperature:0,maxOutputTokens:6000,timeoutMs:15000
+    temperature:0,maxOutputTokens:6000,timeoutMs:9000
    });
    if(transcription)extractedText=transcription.trim().slice(0,150000);
   }
