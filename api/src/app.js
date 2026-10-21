@@ -267,7 +267,7 @@ app.get('/api/v1/tutor/chats/:id',auth,asyncRoute(async(req,res)=>{
 }));
 
 // Personal tutor endpoint. Context is loaded server-side and scoped to the signed-in learner.
-const tutorChatInput=z.object({question:z.string().trim().min(2).max(4000),subject:z.string().trim().max(100).optional().default(''),use_materials:z.boolean().optional().default(true),history:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().max(4000)})).max(12).optional().default([]),conversation_id:z.string().uuid().optional().nullable()});
+const tutorChatInput=z.object({question:z.string().trim().min(2).max(4000),subject:z.string().trim().max(100).optional().default(''),use_materials:z.boolean().optional().default(true),history:z.array(z.object({role:z.enum(['user','assistant']),content:z.string().max(4000)})).max(80).optional().default([]),conversation_id:z.string().uuid().optional().nullable()});
 app.post('/api/v1/tutor/chat',auth,asyncRoute(async(req,res)=>{
  const parsed=tutorChatInput.safeParse(req.body);if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
  const {question,subject,use_materials,history,conversation_id}=parsed.data;
