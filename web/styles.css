@@ -562,3 +562,9 @@ html[data-theme="dark"] .from-user .message-avatar{background:#25263b;color:#d4c
 .tutor-math{overflow-x:auto;margin:12px 0;padding:12px 14px;border-radius:12px;background:var(--paper);font-family:ui-monospace,SFMono-Regular,monospace;white-space:pre-wrap}
 .tutor-math-inline{font-family:ui-monospace,SFMono-Regular,monospace;padding:1px 4px;border-radius:4px;background:var(--paper)}
 @media(max-width:760px){.tutor-recent-card{margin-top:12px}.tutor-saved-chats{max-height:190px}.tutor-layout{gap:12px}}
+
+html[data-theme="dark"] .tutor-recent-card{background:#191a2d;border-color:#303148;color:#f0f0fa;box-shadow:none}
+html[data-theme="dark"] .tutor-saved-chat{color:#f0f0fa}
+html[data-theme="dark"] .tutor-saved-chat:hover,html[data-theme="dark"] .tutor-saved-chat.active{background:#202137;border-color:#33344d}
+html[data-theme="dark"] .saved-chat-icon{background:#292443;color:#d4cbff}
+html[data-theme="dark"] .tutor-math,html[data-theme="dark"] .tutor-math-inline{background:#141527;color:#f0f0fa}
