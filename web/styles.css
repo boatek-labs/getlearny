@@ -29,7 +29,7 @@ body{background:var(--paper);color:var(--ink)}
 
 /* GetLearny visual refresh: forest green, mint, white and warm gold. */
 :root{--forest:#11152B;--forest-deep:#11152B;--mint:#C7BCFF;--mint-soft:#EFEDFF;--gold:#9BE7FF;--paper:#F7F8FC;--text:#17172B;--muted:#74758F;--line:#E5E6F0;--surface:#fff;--shadow:0 18px 45px rgba(21,70,51,.08)}
-body{background:var(--paper);color:var(--text)}
+body{background:var(--paper);color:var(--ink)}
 .sidebar{background:var(--forest-deep);color:#F7F8FF}
 .brand-mark{background:var(--mint);color:var(--forest-deep);box-shadow:0 8px 22px rgba(0,0,0,.12)}
 .nav-item{color:#B7BAD6}.nav-item:hover,.nav-item.active{background:rgba(201,241,223,.15);color:#fff}
@@ -48,10 +48,10 @@ h1,h2,h3,b{letter-spacing:-.025em}.lead{color:var(--muted)}
 .profile-photo-copy form{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.file-label{font-size:13px}.file-label input{display:block;max-width:100%;margin-top:6px}
 .document-record{display:flex;align-items:center;gap:14px}.document-type{display:grid;place-items:center;width:48px;height:48px;flex:0 0 48px;border-radius:14px;background:var(--mint-soft);color:var(--forest);font-size:12px;font-weight:900}.document-info{flex:1;min-width:0}.document-info p{margin:5px 0 0;color:var(--muted);font-size:12px}
 html[data-theme="dark"]{color-scheme:dark;--paper:#0F1020;--text:#F0F0FA;--muted:#A8A9C2;--line:#2A2B45;--surface:#17182C;--mint-soft:#252144;--shadow:0 18px 45px rgba(0,0,0,.2)}
-html[data-theme="dark"] body,html[data-theme="dark"] .main{background:var(--paper);color:var(--text)}
+html[data-theme="dark"] body,html[data-theme="dark"] .main{background:var(--paper);color:var(--ink)}
 html[data-theme="dark"] .topbar{background:rgba(16,27,23,.9);border-color:var(--line)}
-html[data-theme="dark"] .stat-card,html[data-theme="dark"] .subject-card,html[data-theme="dark"] .form-card,html[data-theme="dark"] .practice-card,html[data-theme="dark"] .record,html[data-theme="dark"] .lesson-panel,html[data-theme="dark"] .icon-button{background:var(--white);color:var(--text);border-color:var(--line)}
-html[data-theme="dark"] input,html[data-theme="dark"] textarea{background:#111225;color:var(--text);border-color:var(--line)}
+html[data-theme="dark"] .stat-card,html[data-theme="dark"] .subject-card,html[data-theme="dark"] .form-card,html[data-theme="dark"] .practice-card,html[data-theme="dark"] .record,html[data-theme="dark"] .lesson-panel,html[data-theme="dark"] .icon-button{background:var(--white);color:var(--ink);border-color:var(--line)}
+html[data-theme="dark"] input,html[data-theme="dark"] textarea{background:#111225;color:var(--ink);border-color:var(--line)}
 html[data-theme="dark"] .breadcrumb,html[data-theme="dark"] .section-heading p,html[data-theme="dark"] small{color:var(--muted)}
 html[data-theme="dark"] .profile-photo-preview{border-color:var(--white)}
 @media(max-width:650px){.profile-photo-card{align-items:flex-start;flex-direction:column}.document-record{align-items:flex-start;flex-wrap:wrap}.document-info{min-width:calc(100% - 65px)}.document-record .button{margin-left:60px}}
@@ -550,7 +550,7 @@ html[data-theme="dark"] .from-user .message-avatar{background:#25263b;color:#d4c
 .tutor-recent-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
 .tutor-recent-head h3{font-size:14px;margin:0}.tutor-recent-head p{font-size:11px;color:var(--muted);margin:4px 0 0}
 .tutor-saved-chats{display:grid;gap:6px;max-height:280px;overflow:auto}
-.tutor-saved-chat{display:flex;align-items:center;gap:10px;width:100%;padding:10px;border:1px solid transparent;border-radius:12px;background:transparent;text-align:left;color:var(--text);cursor:pointer}
+.tutor-saved-chat{display:flex;align-items:center;gap:10px;width:100%;padding:10px;border:1px solid transparent;border-radius:12px;background:transparent;text-align:left;color:var(--ink);cursor:pointer}
 .tutor-saved-chat:hover,.tutor-saved-chat.active{background:var(--paper);border-color:var(--line)}
 .tutor-saved-chat>span:nth-child(2){display:grid;gap:4px;min-width:0}.tutor-saved-chat b{font-size:12px;overflow-wrap:anywhere}.tutor-saved-chat small,.tutor-saved-empty{font-size:11px;color:var(--muted);line-height:1.45}
 .saved-chat-icon{display:grid;place-items:center;width:32px;height:32px;flex:0 0 32px;border-radius:10px;background:var(--paper)}
