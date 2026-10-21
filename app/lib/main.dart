@@ -148,7 +148,7 @@ class _ShellState extends State<Shell> {
   final pages = const [DashboardPage(), SubjectsPage(), PracticePage(), JournalPage(), ProfilePage(), DocumentsPage(), TutorChatPage(), TestTrackerPage(), OfflineLessonsPage(), FocusStudioPage()];
   @override void initState(){ super.initState(); authTokenNotifier.addListener(_authChanged); _restore(); }
   @override void dispose(){authTokenNotifier.removeListener(_authChanged);super.dispose();}
-  void _authChanged(){if(!mounted)return;setState(()=>{authRevision++;signedIn=ApiClient.token!=null;});LearnerSubjects.load(refresh:true);_refreshName();}
+  void _authChanged(){if(!mounted)return;setState((){authRevision++;signedIn=ApiClient.token!=null;});LearnerSubjects.load(refresh:true);_refreshName();}
   Future<void> _refreshName()async{final p=await SharedPreferences.getInstance();if(!mounted)return;setState(()=>name=p.getString('name')??name);}
   Future<void> _restore() async { final p=await SharedPreferences.getInstance(); ApiClient.token=p.getString('token'); authTokenNotifier.value=ApiClient.token; if(mounted)setState((){name=p.getString('name')??'Learner'; signedIn=ApiClient.token!=null;authRevision++;}); }
   void _go(int destination){Navigator.of(context).maybePop();setState(()=>index=destination);}
