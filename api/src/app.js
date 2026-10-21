@@ -306,6 +306,11 @@ async function downloadCloudinaryAsset(url){
   addCandidate(url.replace('/raw/upload/','/image/upload/'));
   addCandidate(url.replace('/raw/upload/','/image/upload/fl_attachment/'));
  }
+ // Some older auto-uploaded PDFs were stored without the raw-file extension.
+ // Probe the equivalent .pdf URL as well as image/raw delivery paths before failing.
+ for(const candidate of [...candidates]){
+  try{const parsed=new URL(candidate);const tail=parsed.pathname.split('/').pop()||'';if(!/\\.[a-z0-9]{2,8}$/i.test(tail)){const withPdf=new URL(parsed.toString());withPdf.pathname+='.pdf';addCandidate(withPdf.toString());}else if(/\\.pdf$/i.test(tail)){const withoutPdf=new URL(parsed.toString());withoutPdf.pathname=withoutPdf.pathname.replace(/\\.pdf$/i,'');addCandidate(withoutPdf.toString());}}catch{}
+ }
  let lastStatus=0,lastContentType='',lastNetworkError='';
  for(const candidate of candidates){
   try{
@@ -375,7 +380,9 @@ app.post('/api/v1/documents/:id/ocr',auth,asyncRoute(async(req,res)=>{
  if(!found.rows.length)return fail(res,404,'Study material not found');
  const doc=found.rows[0];let buffer=doc.content;if(!buffer&&doc.storage_path){try{buffer=await downloadCloudinaryAsset(doc.storage_path)}catch(error){console.error('Cloudinary material retrieval failed:',error.message);return fail(res,502,error.message||'Could not retrieve this material from Cloudinary. Try again later.')}}if(!buffer)return fail(res,422,'Original file unavailable. Upload it again.');
  let extractedText='';
- if(OCR_IMAGE_MIMES.has(doc.mime_type)){
+ if(TEXT_MATERIAL_EXTENSIONS.has(path.extname(doc.original_name||'').toLowerCase())){
+  extractedText=buffer.toString('utf8').replace(/\\u0000/g,'').trim().slice(0,150000);
+ }else if(OCR_IMAGE_MIMES.has(doc.mime_type)){
   let worker;
   try{worker=await createWorker('eng');const result=await worker.recognize(buffer);extractedText=String(result.data?.text||'').trim().slice(0,150000);}
   catch(error){console.error('Stored image OCR failed:',error.message);return fail(res,502,'OCR could not read this image. Try a clearer image.');}
