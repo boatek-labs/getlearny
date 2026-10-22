@@ -1044,3 +1044,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   #app-sidebar.sidebar{overflow:hidden!important}
   #app-sidebar #sidebar-collapse-toggle{display:none!important}
 }
+
+
+/* Nudge the outward-facing grip 2px back toward the sidebar edge. */
+@media(min-width:901px){
+  #app-sidebar #sidebar-collapse-toggle{right:-1px!important}
+}
