@@ -872,6 +872,19 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     z-index:1000!important;
     transition:width .12s ease-out!important;
   }
+  /* The dashboard stays behind the grip; the sidebar edge sits over
+     the grip's inner 3px so it visually emerges from the sidebar. */
+  #app-sidebar.sidebar::after{
+    content:"";
+    position:absolute;
+    top:0;
+    right:0;
+    bottom:0;
+    width:3px;
+    background:#11152B;
+    z-index:3;
+    pointer-events:none;
+  }
   #app-sidebar .sidebar-scroll{
     position:absolute!important;
     inset:0!important;
