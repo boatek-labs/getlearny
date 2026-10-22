@@ -849,3 +849,37 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 }
 @media(max-width:900px){#sidebar-collapse-toggle{display:none!important}.sidebar{scrollbar-width:none!important}.sidebar::-webkit-scrollbar{display:none!important;width:0!important}}
 @media(prefers-reduced-motion:reduce){.sidebar,.main,#sidebar-collapse-toggle,#sidebar-collapse-toggle span{transition:none!important}}
+
+
+/* Attached draggable sidebar grip: drag horizontally to resize/collapse. */
+@media(min-width:901px){
+ body{--gl-sidebar-width:264px}
+ body.sidebar-collapsed{--gl-sidebar-width:78px}
+ .sidebar{width:var(--gl-sidebar-width)!important;box-sizing:border-box;overflow-x:visible!important;transition:width .12s ease-out}
+ .main{margin-left:var(--gl-sidebar-width)!important;width:calc(100% - var(--gl-sidebar-width))!important;transition:margin-left .12s ease-out,width .12s ease-out}
+ #sidebar-collapse-toggle{
+   position:absolute;top:82px;right:-1px;transform:translateX(0);
+   z-index:40;width:23px;height:38px;gap:3px;
+   border:1px solid #E2E4EF;border-right:0;border-radius:9px 0 0 9px;
+   box-shadow:-3px 3px 12px rgba(35,39,75,.08);
+   cursor:ew-resize;touch-action:none;user-select:none;
+ }
+ #sidebar-collapse-toggle:hover{transform:translateX(-1px)}
+ #sidebar-collapse-toggle:active{background:#EAE7FF}
+ body.sidebar-resizing,body.sidebar-resizing *{cursor:ew-resize!important;user-select:none!important}
+ body.sidebar-resizing .sidebar,body.sidebar-resizing .main{transition:none!important}
+ body.sidebar-collapsed .sidebar{padding-left:10px;padding-right:10px}
+ body.sidebar-collapsed .sidebar .brand{justify-content:center;padding-left:0;padding-right:0}
+ body.sidebar-collapsed .sidebar .brand>span:last-child,
+ body.sidebar-collapsed .sidebar .side-label,
+ body.sidebar-collapsed .sidebar .exam-card,
+ body.sidebar-collapsed .sidebar .account-label,
+ body.sidebar-collapsed .sidebar .account-logout{display:none!important}
+ body.sidebar-collapsed .sidebar nav{margin-top:32px}
+ body.sidebar-collapsed .sidebar .nav-item,
+ body.sidebar-collapsed .sidebar .nav-item.active{justify-content:center;gap:0;padding:11px 0;font-size:0}
+ body.sidebar-collapsed .sidebar .nav-item span{margin:0;font-size:19px}
+ body.sidebar-collapsed .sidebar .profile-link{justify-content:center;padding:8px 0}
+ body.sidebar-collapsed .sidebar .avatar{margin:0}
+}
+@media(max-width:900px){#sidebar-collapse-toggle{display:none!important}}
