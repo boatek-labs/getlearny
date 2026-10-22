@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 760" role="img" aria-labelledby="title desc">
+<title id="title">A learner's study corner</title><desc id="desc">A warm, modern illustration of a student learning at a desk with a laptop, open book, notebook, plant and floating study symbols.</desc>
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#eeebff"/><stop offset="1" stop-color="#dff7ff"/></linearGradient>
+ <linearGradient id="shirt" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7a62f5"/><stop offset="1" stop-color="#4b43bd"/></linearGradient>
+ <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#20254a"/><stop offset="1" stop-color="#343c70"/></linearGradient>
+ <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#37356f" flood-opacity=".14"/></filter>
+</defs>
+<rect width="900" height="760" rx="42" fill="url(#bg)"/>
+<circle cx="690" cy="150" r="92" fill="#fff" opacity=".58"/><circle cx="155" cy="170" r="66" fill="#fff" opacity=".55"/>
+<path d="M0 570 Q170 515 330 575 T650 555 T900 570 V760 H0Z" fill="#d6d4f5" opacity=".7"/>
+<g opacity=".85"><path d="M112 120l8 21 21 8-21 8-8 21-8-21-21-8 21-8z" fill="#8d7af9"/><path d="M755 260l6 15 15 6-15 6-6 15-6-15-15-6 15-6z" fill="#59bfdc"/><circle cx="762" cy="390" r="8" fill="#fff"/><circle cx="190" cy="320" r="6" fill="#8d7af9"/></g>
+<!-- window and shelf -->
+<rect x="260" y="72" width="382" height="265" rx="22" fill="#fff" opacity=".68"/>
+<rect x="279" y="91" width="344" height="227" rx="14" fill="#c5eaf5"/>
+<path d="M451 91v227M279 204h344" stroke="#fff" stroke-width="10" opacity=".85"/>
+<path d="M300 302 Q345 250 390 300 T480 297 T600 296" fill="none" stroke="#9cd4df" stroke-width="6"/>
+<path d="M282 340h339" stroke="#b4a9ef" stroke-width="12" stroke-linecap="round"/>
+<!-- plant -->
+<g transform="translate(115 414)" filter="url(#shadow)"><path d="M28 72Q-8 28 16 0Q57 19 42 66" fill="#68b9a2"/><path d="M44 72Q43 15 86 8Q94 51 48 76" fill="#469b8c"/><path d="M37 75Q-5 60 1 35Q37 37 43 75" fill="#8dd2ba"/><path d="M18 76h63l-8 83H28Z" fill="#fff" stroke="#d8d7ed" stroke-width="4"/><path d="M23 91h54" stroke="#e4e2f5" stroke-width="4"/></g>
+<!-- desk -->
+<path d="M70 545Q450 515 830 545L810 586Q450 610 90 586Z" fill="#b9a8f0"/><path d="M105 581h690l-18 22H123Z" fill="#8f7cce"/><path d="M145 602l-18 127h34l23-127M742 602l23 127h-34l-23-127" fill="#9a88dc"/>
+<!-- learner -->
+<g filter="url(#shadow)">
+ <path d="M365 329q-12-50 23-79 35-28 71 0 31 25 20 77l-10 51h-91Z" fill="#302344"/>
+ <path d="M379 309q-10-68 36-81 52-13 70 30l-5 50-17 40-61-4Z" fill="#6d402e"/>
+ <path d="M386 306q-6-49 28-66 35-15 57 18l-4 48q-5 34-35 39-33-5-46-39Z" fill="#9b6145"/>
+ <path d="M385 296q-11-39 7-61 24-28 55-12 17 9 23 27-24-12-43-22-14 26-42 32Z" fill="#302344"/>
+ <path d="M400 304h13M442 304h12" stroke="#302344" stroke-width="5" stroke-linecap="round"/><path d="M416 326q12 9 23-1" fill="none" stroke="#6e342f" stroke-width="4" stroke-linecap="round"/>
+ <path d="M391 350l-28 20q-28 23-39 83l-8 54q77 25 162 0l-6-72q-7-44-37-64l-20-19Z" fill="url(#shirt)"/>
+ <path d="M392 354q23 28 47 1l13 22-30 35-41-33Z" fill="#fff" opacity=".85"/>
+ <path d="M373 390q-25 27-38 75l-18 47q-4 15 10 20 14 4 22-11l39-64" fill="#9b6145"/>
+ <path d="M461 392q29 27 32 65l8 42q4 17-10 21-15 4-20-12l-19-50" fill="#9b6145"/>
+</g>
+<!-- laptop -->
+<g filter="url(#shadow)"><path d="M462 397h212q13 0 13 13v119H450V410q0-13 12-13Z" fill="#30365e"/><rect x="466" y="411" width="204" height="99" rx="5" fill="url(#screen)"/><rect x="482" y="425" width="86" height="7" rx="3.5" fill="#a49aff"/><rect x="482" y="440" width="153" height="5" rx="2.5" fill="#7a8dd9"/><rect x="482" y="452" width="120" height="5" rx="2.5" fill="#79d4e9"/><rect x="482" y="464" width="141" height="5" rx="2.5" fill="#7a8dd9"/><circle cx="642" cy="430" r="12" fill="#9be7ff"/><path d="M442 529h252l-21 16H461Z" fill="#8b8db5"/></g>
+<!-- open book and pencil -->
+<g filter="url(#shadow)"><path d="M225 501q65-20 113 5v76q-48-27-113-5Z" fill="#fff"/><path d="M338 506q53-27 109-5v76q-56-22-109 5Z" fill="#f9f8ff"/><path d="M338 506v76" stroke="#c7c1ee" stroke-width="4"/><path d="M244 521l71-6M244 536l71-6M244 551l71-6M356 520l70-7M356 535l70-7M356 550l70-7" stroke="#d6d3ee" stroke-width="4" stroke-linecap="round"/><path d="M208 488l9 1 51 75-9 7Z" fill="#ffbd6e"/><path d="M208 488l7 0 2 11Z" fill="#4b4b6d"/></g>
+<!-- floating study card -->
+<g filter="url(#shadow)"><rect x="618" y="183" width="205" height="104" rx="18" fill="#fff"/><rect x="635" y="201" width="35" height="35" rx="11" fill="#eeebff"/><path d="M646 219l6 6 11-14" fill="none" stroke="#7057f5" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="682" y="205" width="112" height="8" rx="4" fill="#282a4a"/><rect x="682" y="221" width="91" height="6" rx="3" fill="#d0d0e4"/><rect x="635" y="251" width="158" height="7" rx="3.5" fill="#e8e7f5"/><rect x="635" y="265" width="105" height="6" rx="3" fill="#c8c4ef"/></g>
+<g transform="translate(713 475)"><circle r="28" fill="#fff"/><path d="M-10 0l7 8 14-18" fill="none" stroke="#48a995" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></g>
+</svg>
