@@ -851,147 +851,157 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 @media(prefers-reduced-motion:reduce){.sidebar,.main,#sidebar-collapse-toggle,#sidebar-collapse-toggle span{transition:none!important}}
 
 
-/* Attached draggable sidebar grip: drag horizontally to resize/collapse. */
+/* Sidebar shell, scroll region, and fixed resize grip.
+   Keep this as one source of truth: the menu scrolls independently, while
+   the grip remains anchored to the fixed sidebar and above the dashboard. */
 @media(min-width:901px){
- body{--gl-sidebar-width:264px}
- body.sidebar-collapsed{--gl-sidebar-width:78px}
- .sidebar{width:var(--gl-sidebar-width)!important;box-sizing:border-box;overflow-x:visible!important;transition:width .12s ease-out}
- .main{margin-left:var(--gl-sidebar-width)!important;width:calc(100% - var(--gl-sidebar-width))!important;transition:margin-left .12s ease-out,width .12s ease-out}
- #sidebar-collapse-toggle{
-   position:absolute;top:82px;right:-1px;transform:translateX(0);
-   z-index:40;width:23px;height:38px;gap:3px;
-   border:1px solid #E2E4EF;border-right:0;border-radius:9px 0 0 9px;
-   box-shadow:-3px 3px 12px rgba(35,39,75,.08);
-   cursor:ew-resize;touch-action:none;user-select:none;
- }
- #sidebar-collapse-toggle:hover{transform:translateX(-1px)}
- #sidebar-collapse-toggle:active{background:#EAE7FF}
- body.sidebar-resizing,body.sidebar-resizing *{cursor:ew-resize!important;user-select:none!important}
- body.sidebar-resizing .sidebar,body.sidebar-resizing .main{transition:none!important}
- body.sidebar-collapsed .sidebar{padding-left:10px;padding-right:10px}
- body.sidebar-collapsed .sidebar .brand{justify-content:center;padding-left:0;padding-right:0}
- body.sidebar-collapsed .sidebar .brand>span:last-child,
- body.sidebar-collapsed .sidebar .side-label,
- body.sidebar-collapsed .sidebar .exam-card,
- body.sidebar-collapsed .sidebar .account-label,
- body.sidebar-collapsed .sidebar .account-logout{display:none!important}
- body.sidebar-collapsed .sidebar nav{margin-top:32px}
- body.sidebar-collapsed .sidebar .nav-item,
- body.sidebar-collapsed .sidebar .nav-item.active{justify-content:center;gap:0;padding:11px 0;font-size:0}
- body.sidebar-collapsed .sidebar .nav-item span{margin:0;font-size:19px}
- body.sidebar-collapsed .sidebar .profile-link{justify-content:center;padding:8px 0}
- body.sidebar-collapsed .sidebar .avatar{margin:0}
-}
-@media(max-width:900px){#sidebar-collapse-toggle{display:none!important}}
+  body{--gl-sidebar-width:264px}
+  body.sidebar-collapsed{--gl-sidebar-width:78px}
 
-@media(min-width:901px){
- body.sidebar-collapsed .sidebar{width:var(--gl-sidebar-width)!important}
- body.sidebar-collapsed .main{margin-left:var(--gl-sidebar-width)!important;width:calc(100% - var(--gl-sidebar-width))!important}
-}
-
-
-/* Final geometry correction: the grip belongs to the sidebar itself,
-   sits at its vertical midpoint, and is anchored exactly to its right edge. */
-@media(min-width:901px){
- #app-sidebar.sidebar{
-   position:fixed!important;
-   overflow-x:visible!important;
- }
- #app-sidebar #sidebar-collapse-toggle{
-   position:absolute!important;
-   top:50%!important;
-   right:0!important;
-   left:auto!important;
-   bottom:auto!important;
-   margin:0!important;
-   transform:translateY(-50%)!important;
-   width:24px!important;
-   height:42px!important;
-   box-sizing:border-box!important;
-   border:1px solid #E2E4EF!important;
-   border-right:0!important;
-   border-radius:9px 0 0 9px!important;
-   z-index:100!important;
- }
- #app-sidebar #sidebar-collapse-toggle:hover{
-   transform:translateY(-50%)!important;
- }
- #app-sidebar #sidebar-collapse-toggle:active{
-   transform:translateY(-50%)!important;
- }
-}
-
-
-/* Separate the fixed sidebar shell from its scrolling content. The grip
-   is a sibling of .sidebar-scroll, so scrolling menu items cannot move it. */
-@media(min-width:901px){
- #app-sidebar.sidebar{
-   position:fixed!important;inset:0 auto 0 0!important;
-   height:100vh!important;height:100dvh!important;
-   overflow:hidden!important;overflow-x:hidden!important;overflow-y:hidden!important;
-   padding:0!important;display:block!important;
-   width:var(--gl-sidebar-width,264px)!important;
-   box-sizing:border-box!important;
- }
- #app-sidebar .sidebar-scroll{
-   position:absolute;inset:0;
-   overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
-   scrollbar-width:none;-ms-overflow-style:none;
-   padding:26px 18px 16px;box-sizing:border-box;
-   display:flex;flex-direction:column;
- }
- #app-sidebar .sidebar-scroll::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
- #app-sidebar #sidebar-collapse-toggle{
-   position:absolute!important;top:50%!important;right:0!important;left:auto!important;bottom:auto!important;
-   transform:translateY(-50%)!important;z-index:100!important;
-   width:24px!important;height:42px!important;box-sizing:border-box!important;
-   border:1px solid #E2E4EF!important;border-right:0!important;
-   border-radius:9px 0 0 9px!important;margin:0!important;
-   touch-action:none!important;cursor:ew-resize!important;
- }
- #app-sidebar #sidebar-collapse-toggle:hover,
- #app-sidebar #sidebar-collapse-toggle:active{transform:translateY(-50%)!important}
- body.sidebar-collapsed #app-sidebar .sidebar-scroll{padding-left:10px;padding-right:10px}
-}
-@media(max-width:900px){
- #app-sidebar .sidebar-scroll{overflow-y:auto;scrollbar-width:none}
- #app-sidebar .sidebar-scroll::-webkit-scrollbar{display:none!important;width:0!important}
-}
-
-
-/* Sidebar grip: flip the tab to the OUTSIDE edge, while keeping it fixed
-   to the non-scrolling sidebar shell. Mobile keeps its normal drawer UX. */
-@media(min-width:901px){
   #app-sidebar.sidebar{
-    overflow:hidden!important;
+    position:fixed!important;
+    inset:0 auto 0 0!important;
+    width:var(--gl-sidebar-width)!important;
+    height:100vh!important;
+    height:100dvh!important;
+    box-sizing:border-box!important;
+    padding:0!important;
+    display:block!important;
+    overflow:visible!important;
     isolation:isolate;
+    z-index:1000!important;
+    transition:width .12s ease-out!important;
+  }
+  #app-sidebar .sidebar-scroll{
+    position:absolute!important;
+    inset:0!important;
+    width:100%!important;
+    height:100%!important;
+    box-sizing:border-box!important;
+    display:flex!important;
+    flex-direction:column!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+    padding:26px 18px 16px;
+    z-index:1;
+  }
+  #app-sidebar .sidebar-scroll::-webkit-scrollbar{
+    display:none!important;
+    width:0!important;
+    height:0!important;
   }
   #app-sidebar #sidebar-collapse-toggle{
+    position:absolute!important;
     top:50%!important;
-    right:0!important;
+    right:-3px!important;
     left:auto!important;
-    transform:translate(100%,-50%)!important;
+    bottom:auto!important;
+    margin:0!important;
+    width:24px!important;
+    height:44px!important;
+    padding:0!important;
+    box-sizing:border-box!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:3px!important;
+    transform:translateY(-50%) rotate(180deg)!important;
+    transform-origin:center center!important;
     border:1px solid #E2E4EF!important;
-    border-left:0!important;
-    border-right:1px solid #E2E4EF!important;
-    border-radius:0 9px 9px 0!important;
+    border-radius:9px!important;
+    background:#FFFFFF!important;
+    color:#676D88!important;
     box-shadow:3px 3px 12px rgba(35,39,75,.08)!important;
-    z-index:101!important;
+    z-index:2!important;
+    pointer-events:auto!important;
+    cursor:ew-resize!important;
+    touch-action:none!important;
+    user-select:none!important;
   }
-  #app-sidebar #sidebar-collapse-toggle:hover,
+  #app-sidebar #sidebar-collapse-toggle span{
+    display:block!important;
+    width:12px!important;
+    height:1.5px!important;
+    border-radius:2px!important;
+    background:currentColor!important;
+  }
+  #app-sidebar #sidebar-collapse-toggle:hover{
+    background:#F0EEFF!important;
+    border-color:#DAD5FF!important;
+    color:#6256C7!important;
+    transform:translateY(-50%) rotate(180deg)!important;
+  }
   #app-sidebar #sidebar-collapse-toggle:active{
-    transform:translate(100%,-50%)!important;
+    transform:translateY(-50%) rotate(180deg)!important;
+    background:#EAE7FF!important;
   }
+  #app-sidebar #sidebar-collapse-toggle:focus-visible{
+    outline:3px solid rgba(129,117,232,.3)!important;
+    outline-offset:2px!important;
+  }
+
+  .main{
+    position:relative;
+    z-index:0!important;
+    margin-left:var(--gl-sidebar-width)!important;
+    width:calc(100% - var(--gl-sidebar-width))!important;
+    transition:margin-left .12s ease-out,width .12s ease-out!important;
+  }
+  body.sidebar-collapsed #app-sidebar .sidebar-scroll{
+    padding-left:10px;
+    padding-right:10px;
+  }
+  body.sidebar-collapsed #app-sidebar .brand{
+    justify-content:center;
+    padding-left:0;
+    padding-right:0;
+  }
+  body.sidebar-collapsed #app-sidebar .brand>span:last-child,
+  body.sidebar-collapsed #app-sidebar .side-label,
+  body.sidebar-collapsed #app-sidebar .exam-card,
+  body.sidebar-collapsed #app-sidebar .account-label,
+  body.sidebar-collapsed #app-sidebar .account-logout{
+    display:none!important;
+  }
+  body.sidebar-collapsed #app-sidebar nav{margin-top:32px}
+  body.sidebar-collapsed #app-sidebar .nav-item,
+  body.sidebar-collapsed #app-sidebar .nav-item.active{
+    justify-content:center;
+    gap:0;
+    padding:11px 0;
+    font-size:0;
+  }
+  body.sidebar-collapsed #app-sidebar .nav-item span{
+    margin:0;
+    font-size:19px;
+  }
+  body.sidebar-collapsed #app-sidebar .profile-link{
+    justify-content:center;
+    padding:8px 0;
+  }
+  body.sidebar-collapsed #app-sidebar .avatar{margin:0}
+  body.sidebar-resizing,
+  body.sidebar-resizing *{
+    cursor:ew-resize!important;
+    user-select:none!important;
+  }
+  body.sidebar-resizing #app-sidebar.sidebar,
+  body.sidebar-resizing .main{transition:none!important}
 }
+
 @media(max-width:900px){
-  /* The sidebar is a drawer on phones, not a resizable desktop rail. */
   #app-sidebar.sidebar{
     display:flex!important;
     flex-direction:column!important;
     padding:0!important;
     overflow:hidden!important;
-    height:100dvh;
-    max-height:100dvh;
+    height:100vh!important;
+    height:100dvh!important;
+    max-height:100dvh!important;
   }
   #app-sidebar .sidebar-scroll{
     position:relative!important;
@@ -999,6 +1009,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     flex:1 1 auto!important;
     min-height:0!important;
     width:100%!important;
+    height:auto!important;
     display:flex!important;
     flex-direction:column!important;
     padding:20px 15px 14px!important;
@@ -1009,100 +1020,15 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     -webkit-overflow-scrolling:touch;
     scrollbar-width:none!important;
   }
-  #app-sidebar .sidebar-scroll::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+  #app-sidebar .sidebar-scroll::-webkit-scrollbar{
+    display:none!important;
+    width:0!important;
+    height:0!important;
+  }
   #app-sidebar #sidebar-collapse-toggle{display:none!important}
 }
 
-
-/* Final grip orientation/placement: rotate the entire tab 180 degrees and
-   keep it 3px outside the sidebar edge. The sidebar shell clips its own
-   contents, so the handle is positioned outside without being in the
-   scrollable .sidebar-scroll region. */
-@media(min-width:901px){
-  #app-sidebar.sidebar{overflow:visible!important}
-  #app-sidebar .sidebar-scroll{z-index:1}
-  #app-sidebar #sidebar-collapse-toggle{
-    position:absolute!important;
-    top:50%!important;
-    right:-3px!important;
-    left:auto!important;
-    bottom:auto!important;
-    margin:0!important;
-    transform:translate(100%,-50%) rotate(180deg)!important;
-    transform-origin:center center!important;
-    border:1px solid #E2E4EF!important;
-    border-radius:9px!important;
-    box-shadow:3px 3px 12px rgba(35,39,75,.08)!important;
-    z-index:102!important;
-  }
-  #app-sidebar #sidebar-collapse-toggle:hover,
-  #app-sidebar #sidebar-collapse-toggle:active{
-    transform:translate(100%,-50%) rotate(180deg)!important;
-  }
-}
-@media(max-width:900px){
-  #app-sidebar.sidebar{overflow:hidden!important}
-  #app-sidebar #sidebar-collapse-toggle{display:none!important}
-}
-
-
-/* Nudge the outward-facing grip 2px back toward the sidebar edge. */
-@media(min-width:901px){
-  #app-sidebar #sidebar-collapse-toggle{right:-1px!important}
-}
-
-
-/* User adjustment: move the grip another 2px left, to -3px. */
-@media(min-width:901px){
-  #app-sidebar #sidebar-collapse-toggle{right:-3px!important}
-}
-
-
-/* Refined grip styling: let the tab tuck beneath the sidebar edge, with
-   2px more vertical length (42px -> 44px). */
-@media(min-width:901px){
-  #app-sidebar.sidebar{overflow:hidden!important}
-  #app-sidebar #sidebar-collapse-toggle{
-    right:-3px!important;
-    width:24px!important;
-    height:44px!important;
-    transform:translate(0,-50%) rotate(180deg)!important;
-    transform-origin:center center!important;
-    border:1px solid #E2E4EF!important;
-    border-radius:9px!important;
-    z-index:102!important;
-  }
-  #app-sidebar #sidebar-collapse-toggle:hover,
-  #app-sidebar #sidebar-collapse-toggle:active{
-    transform:translate(0,-50%) rotate(180deg)!important;
-  }
-}
-
-
-/* Layering correction: sidebar shell and grip must sit above the dashboard.
-   The scroll area stays below the grip, and the grip tucks into the sidebar edge. */
-@media(min-width:901px){
-  #app-sidebar.sidebar{
-    z-index:1000!important;
-    overflow:hidden!important;
-  }
-  #app-sidebar .sidebar-scroll{
-    position:absolute!important;
-    z-index:1!important;
-  }
-  #app-sidebar #sidebar-collapse-toggle{
-    z-index:1002!important;
-    right:-3px!important;
-    transform:translate(0,-50%) rotate(180deg)!important;
-    height:44px!important;
-    pointer-events:auto!important;
-  }
-  #app-sidebar #sidebar-collapse-toggle:hover,
-  #app-sidebar #sidebar-collapse-toggle:active{
-    transform:translate(0,-50%) rotate(180deg)!important;
-  }
-  .main{
-    position:relative;
-    z-index:0!important;
-  }
+@media(prefers-reduced-motion:reduce){
+  #app-sidebar.sidebar,.main,#app-sidebar #sidebar-collapse-toggle,
+  #app-sidebar #sidebar-collapse-toggle span{transition:none!important}
 }
