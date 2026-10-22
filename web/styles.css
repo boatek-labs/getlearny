@@ -883,3 +883,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
  body.sidebar-collapsed .sidebar .avatar{margin:0}
 }
 @media(max-width:900px){#sidebar-collapse-toggle{display:none!important}}
+
+@media(min-width:901px){
+ body.sidebar-collapsed .sidebar{width:var(--gl-sidebar-width)!important}
+ body.sidebar-collapsed .main{margin-left:var(--gl-sidebar-width)!important;width:calc(100% - var(--gl-sidebar-width))!important}
+}
