@@ -161,18 +161,60 @@ async function loadDocuments(){if(!state.token){$('#document-list').innerHTML='<
 function closeMobileNav(){document.body.classList.remove('mobile-nav-open');const toggle=$('#mobile-menu-toggle');if(toggle)toggle.setAttribute('aria-expanded','false');}
 const sidebarCollapseToggle=$('#sidebar-collapse-toggle');
 if(sidebarCollapseToggle){
-  const collapsed=localStorage.getItem('gl_sidebar_collapsed')==='1';
-  document.body.classList.toggle('sidebar-collapsed',collapsed);
-  sidebarCollapseToggle.setAttribute('aria-pressed',String(collapsed));
-  sidebarCollapseToggle.setAttribute('aria-label',collapsed?'Expand sidebar':'Collapse sidebar');
-  sidebarCollapseToggle.title=collapsed?'Expand sidebar':'Collapse sidebar';
-  sidebarCollapseToggle.addEventListener('click',()=>{
-    const next=document.body.classList.toggle('sidebar-collapsed');
-    localStorage.setItem('gl_sidebar_collapsed',next?'1':'0');
-    sidebarCollapseToggle.setAttribute('aria-pressed',String(next));
-    sidebarCollapseToggle.setAttribute('aria-label',next?'Expand sidebar':'Collapse sidebar');
-    sidebarCollapseToggle.title=next?'Expand sidebar':'Collapse sidebar';
+  const desktop=()=>window.matchMedia('(min-width: 901px)').matches;
+  const baseWidth=()=>window.innerWidth>=1500?276:264;
+  let startX=0,startWidth=baseWidth(),dragging=false,changed=false;
+  const applyWidth=(width)=>{
+    const bounded=Math.max(78,Math.min(baseWidth(),width));
+    document.body.style.setProperty('--gl-sidebar-width',bounded+'px');
+    document.body.classList.toggle('sidebar-collapsed',bounded<=120);
+    sidebarCollapseToggle.setAttribute('aria-valuenow',String(Math.round(bounded)));
+    sidebarCollapseToggle.setAttribute('aria-label',bounded<=120?'Drag right to expand sidebar':'Drag left to collapse sidebar');
+    sidebarCollapseToggle.title=bounded<=120?'Drag right to expand sidebar':'Drag left to collapse sidebar';
+  };
+  const initial=localStorage.getItem('gl_sidebar_width');
+  const saved=initial===null?(localStorage.getItem('gl_sidebar_collapsed')==='1'?78:baseWidth()):Number(initial);
+  applyWidth(Number.isFinite(saved)?saved:baseWidth());
+  sidebarCollapseToggle.setAttribute('role','slider');
+  sidebarCollapseToggle.setAttribute('aria-orientation','horizontal');
+  sidebarCollapseToggle.setAttribute('aria-valuemin','78');
+  sidebarCollapseToggle.setAttribute('aria-valuemax',String(baseWidth()));
+  sidebarCollapseToggle.addEventListener('pointerdown',event=>{
+    if(!desktop())return;
+    dragging=true;changed=false;startX=event.clientX;
+    startWidth=parseFloat(getComputedStyle(document.body).getPropertyValue('--gl-sidebar-width'))||baseWidth();
+    document.body.classList.add('sidebar-resizing');
+    try{sidebarCollapseToggle.setPointerCapture(event.pointerId)}catch{}
+    event.preventDefault();
   });
+  sidebarCollapseToggle.addEventListener('pointermove',event=>{
+    if(!dragging)return;
+    const width=Math.max(78,Math.min(baseWidth(),startWidth+(event.clientX-startX)));
+    if(Math.abs(event.clientX-startX)>2)changed=true;
+    applyWidth(width);
+  });
+  const finishDrag=event=>{
+    if(!dragging)return;
+    dragging=false;document.body.classList.remove('sidebar-resizing');
+    const width=Math.max(78,Math.min(baseWidth(),parseFloat(getComputedStyle(document.body).getPropertyValue('--gl-sidebar-width'))||baseWidth()));
+    if(changed){
+      const snapped=width<125?78:width>baseWidth()-18?baseWidth():width;
+      applyWidth(snapped);
+      localStorage.setItem('gl_sidebar_width',String(snapped));
+      localStorage.setItem('gl_sidebar_collapsed',snapped<=120?'1':'0');
+    }
+    try{sidebarCollapseToggle.releasePointerCapture(event.pointerId)}catch{}
+  };
+  sidebarCollapseToggle.addEventListener('pointerup',finishDrag);
+  sidebarCollapseToggle.addEventListener('pointercancel',finishDrag);
+  sidebarCollapseToggle.addEventListener('keydown',event=>{
+    if(!desktop()||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    event.preventDefault();
+    let width=parseFloat(getComputedStyle(document.body).getPropertyValue('--gl-sidebar-width'))||baseWidth();
+    if(event.key==='Home')width=78;else if(event.key==='End')width=baseWidth();else width+=event.key==='ArrowLeft'?-20:20;
+    applyWidth(width);localStorage.setItem('gl_sidebar_width',String(width));localStorage.setItem('gl_sidebar_collapsed',width<=120?'1':'0');
+  });
+  window.addEventListener('resize',()=>{if(!desktop()){document.body.classList.remove('sidebar-resizing');}else if(!document.body.classList.contains('sidebar-resizing')){const width=parseFloat(getComputedStyle(document.body).getPropertyValue('--gl-sidebar-width'))||baseWidth();applyWidth(Math.min(width,baseWidth()));}});
 }
 $('#mobile-menu-toggle')?.addEventListener('click',()=>{const open=!document.body.classList.contains('mobile-nav-open');document.body.classList.toggle('mobile-nav-open',open);$('#mobile-menu-toggle').setAttribute('aria-expanded',String(open));});
 $('#mobile-nav-backdrop')?.addEventListener('click',closeMobileNav);
