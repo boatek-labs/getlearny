@@ -643,3 +643,18 @@ html[data-theme="dark"] #view-profile .api-settings{border-color:#34324f}
 @media(prefers-reduced-motion:reduce){
   #view-profile .auth-card .auth-toggle button,#view-profile .auth-card>label input,#view-profile #google-signin-button{transition:none}
 }
+
+
+/* Tighten Google Identity Services iframe/pill: remove oversized white surround. */
+#view-profile #google-signin-wrap{width:100%;min-width:0;gap:12px}
+#view-profile #google-signin-button{
+  width:100%;min-height:0;height:auto;padding:0;margin:0;
+  border:0;border-radius:12px;background:transparent;box-shadow:none;overflow:visible;
+  line-height:0;
+}
+#view-profile #google-signin-button iframe{
+  display:block!important;width:100%!important;max-width:100%!important;
+  margin:0 auto!important;border:0!important;
+}
+#view-profile #google-signin-button:hover{border:0;box-shadow:none}
+html[data-theme="dark"] #view-profile #google-signin-button{background:transparent;border:0}
