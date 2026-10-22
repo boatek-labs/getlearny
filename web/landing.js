@@ -27,7 +27,7 @@
   try { signedIn=Boolean(localStorage.getItem('gl_token')); } catch(e) {}
   if(signedIn){
     $$('[data-auth-login]').forEach(a=>{a.href='/app.html';a.textContent='Dashboard';a.classList.add('nav-dashboard');});
-    $('a[href*="auth=signup"]').forEach(a=>{
+    $$('a[href*="auth=signup"]').forEach(a=>{
       a.href='/app.html';
       const span=$('span',a);
       const label=a.classList.contains('nav-signup')?'Open dashboard':'Go to dashboard';
