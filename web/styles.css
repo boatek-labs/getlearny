@@ -1012,3 +1012,35 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   #app-sidebar .sidebar-scroll::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
   #app-sidebar #sidebar-collapse-toggle{display:none!important}
 }
+
+
+/* Final grip orientation/placement: rotate the entire tab 180 degrees and
+   keep it 3px outside the sidebar edge. The sidebar shell clips its own
+   contents, so the handle is positioned outside without being in the
+   scrollable .sidebar-scroll region. */
+@media(min-width:901px){
+  #app-sidebar.sidebar{overflow:visible!important}
+  #app-sidebar .sidebar-scroll{z-index:1}
+  #app-sidebar #sidebar-collapse-toggle{
+    position:absolute!important;
+    top:50%!important;
+    right:-3px!important;
+    left:auto!important;
+    bottom:auto!important;
+    margin:0!important;
+    transform:translate(100%,-50%) rotate(180deg)!important;
+    transform-origin:center center!important;
+    border:1px solid #E2E4EF!important;
+    border-radius:9px!important;
+    box-shadow:3px 3px 12px rgba(35,39,75,.08)!important;
+    z-index:102!important;
+  }
+  #app-sidebar #sidebar-collapse-toggle:hover,
+  #app-sidebar #sidebar-collapse-toggle:active{
+    transform:translate(100%,-50%) rotate(180deg)!important;
+  }
+}
+@media(max-width:900px){
+  #app-sidebar.sidebar{overflow:hidden!important}
+  #app-sidebar #sidebar-collapse-toggle{display:none!important}
+}
