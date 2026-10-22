@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs';
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID, randomInt, createHash } from 'node:crypto';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -174,6 +174,45 @@ app.post('/api/v1/auth/google',asyncRoute(async(req,res)=>{
  }
  const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});
  res.json({token,user,created:!found.rowCount});
+}));
+app.post('/api/v1/auth/register/request-otp',asyncRoute(async(req,res)=>{
+ if(!envReady())return fail(res,503,'Authentication is not configured');
+ if(!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM)return fail(res,503,'Email verification is not configured. Add RESEND_API_KEY and EMAIL_FROM in Vercel, then redeploy.');
+ const parsed=registration.safeParse(req.body);
+ if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
+ const data=parsed.data;const email=data.email.toLowerCase();
+ const existing=await query('SELECT id FROM users WHERE email=$1',[email]);
+ if(existing.rowCount)return fail(res,409,'An account with this email already exists. Sign in instead.');
+ const otp=String(randomInt(0,1000000)).padStart(6,'0');
+ const otpHash=createHash('sha256').update(email+':'+otp+':'+process.env.JWT_SECRET).digest('hex');
+ const passwordHash=await bcrypt.hash(data.password,12);
+ await query('INSERT INTO email_verification_codes(email,otp_hash,pending_data,expires_at,attempts) VALUES($1,$2,$3::jsonb,now()+interval \'10 minutes\',0) ON CONFLICT(email) DO UPDATE SET otp_hash=EXCLUDED.otp_hash,pending_data=EXCLUDED.pending_data,expires_at=EXCLUDED.expires_at,attempts=0,created_at=now()',[email,otpHash,JSON.stringify({name:data.name,email,class_level:data.class_level,subjects:normalizeSubjectList(data.subjects),password_hash:passwordHash})]);
+ let mail;
+ try{
+  mail=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.EMAIL_FROM,to:[email],subject:'Your GetLearny verification code',text:'Hello '+data.name+',\n\nYour GetLearny verification code is '+otp+'. It expires in 10 minutes. If you did not request this, you can ignore this email.\n\nGetLearny'}),signal:AbortSignal.timeout(10000)});
+ }catch{return fail(res,502,'The verification email could not be sent because the email service timed out. Please try again.')}
+ if(!mail.ok){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,502,'The verification email could not be sent. Check the email service configuration and try again.')}
+ res.status(202).json({message:'Verification code sent. Check your inbox and spam folder.',email,expiresInSeconds:600});
+}));
+app.post('/api/v1/auth/register/verify-otp',asyncRoute(async(req,res)=>{
+ if(!envReady())return fail(res,503,'Authentication is not configured');
+ const parsed=z.object({email:z.string().trim().email().max(254),code:z.string().regex(/^\d{6}$/)}).safeParse(req.body);
+ if(!parsed.success)return fail(res,400,'Enter the email address and the 6-digit code.');
+ const email=parsed.data.email.toLowerCase();
+ const pending=await query('SELECT otp_hash,pending_data,expires_at,attempts FROM email_verification_codes WHERE email=$1',[email]);
+ const record=pending.rows[0];
+ if(!record)return fail(res,400,'No active verification request. Create your account again to receive a new code.');
+ if(new Date(record.expires_at).getTime()<Date.now()){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,400,'That code has expired. Request a new verification code.')}
+ if(record.attempts>=5){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,429,'Too many incorrect attempts. Request a new verification code.')}
+ const submitted=createHash('sha256').update(email+':'+parsed.data.code+':'+process.env.JWT_SECRET).digest('hex');
+ if(submitted!==record.otp_hash){await query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE email=$1',[email]);return fail(res,400,'That verification code is incorrect. Check it and try again.')}
+ const data=record.pending_data;
+ try{
+  const created=await query('INSERT INTO users(name,email,password_hash,class_level,subjects) VALUES($1,$2,$3,$4,$5) RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at',[data.name,email,data.password_hash,data.class_level,normalizeSubjectList(data.subjects||[])]);
+  await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);
+  const user=created.rows[0];const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});
+  res.status(201).json({token,user});
+ }catch(error){if(error.code==='23505'){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,409,'An account with this email already exists. Sign in instead.')}throw error}
 }));
 app.post('/api/v1/auth/register',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=registration.safeParse(req.body);if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);const {name,email,password,class_level}=parsed.data;const subjects=normalizeSubjectList(parsed.data.subjects);const hash=await bcrypt.hash(password,12);try{const r=await query('INSERT INTO users(name,email,password_hash,class_level,subjects) VALUES($1,$2,$3,$4,$5) RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at',[name,email.toLowerCase(),hash,class_level,subjects]);const user=r.rows[0];const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.status(201).json({token,user})}catch(e){if(e.code==='23505')return fail(res,409,'An account with this email already exists');throw e}}));
 app.post('/api/v1/auth/login',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=login.safeParse(req.body);if(!parsed.success)return fail(res,400,'Enter a valid email and password');const r=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,password_hash,created_at FROM users WHERE email=$1',[parsed.data.email.toLowerCase()]);const user=r.rows[0];if(!user||!await bcrypt.compare(parsed.data.password,user.password_hash))return fail(res,401,'Email or password is incorrect');delete user.password_hash;const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.json({token,user})}));
