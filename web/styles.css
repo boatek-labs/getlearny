@@ -705,3 +705,13 @@ html[data-theme="dark"] #view-profile #google-signin-button {
     width: 100% !important;
   }
 }
+
+/* Align the Google sign-up pill with the white control below it; remove the left offset. */
+#view-profile #google-signin-button {
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+#view-profile #google-signin-button iframe {
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
