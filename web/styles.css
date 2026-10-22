@@ -802,3 +802,63 @@ html[data-theme="dark"] .topbar{background:rgba(20,21,38,.91);border-bottom-colo
 html[data-theme="dark"] .icon-button{background:#1a1b30;border-color:#34324f;color:#e7e5f6}
 html[data-theme="dark"] .icon-button:hover{background:#25243f;border-color:#514a79}
 html[data-theme="dark"] .stat-card,html[data-theme="dark"] .subject-card,html[data-theme="dark"] .tip-card,html[data-theme="dark"] .form-card,html[data-theme="dark"] .practice-card,html[data-theme="dark"] .tutor-context-card,html[data-theme="dark"] .tutor-recent-card,html[data-theme="dark"] .tutor-shortcuts{box-shadow:none}
+
+/* Warm graphite dark theme: Claude-inspired warmth with a distinct GetLearny amber accent. */
+html[data-theme="dark"]{color-scheme:dark;--paper:#191817;--ink:#F2EFE9;--muted:#B4ADA3;--line:#3B3833;--white:#262421;--surface:#262421;--blue:#E8A06A;--blue-soft:#393027;--gold:#F2C18F;--gold-soft:#393027;--navy:#191817;--mint-soft:#393027;--shadow:0 18px 48px rgba(0,0,0,.24)}
+html[data-theme="dark"] body,html[data-theme="dark"] .main,html[data-theme="dark"] .view{background:var(--paper);color:var(--ink)}
+html[data-theme="dark"] .sidebar{background:linear-gradient(180deg,#211f1c,#1d1b19);color:var(--ink);border-right-color:#38342f;box-shadow:8px 0 30px #0002}
+html[data-theme="dark"] .brand,html[data-theme="dark"] .profile-link{color:var(--ink)}
+html[data-theme="dark"] .brand small,html[data-theme="dark"] .side-label{color:#a59d92}
+html[data-theme="dark"] .nav-item{color:#c4bcb1;border-color:transparent}
+html[data-theme="dark"] .nav-item:hover{background:#302c27;border-color:#494137;color:#fff4e8}
+html[data-theme="dark"] .nav-item.active{background:linear-gradient(100deg,#3b3026,#302922);color:#ffd0a6;border-color:#514033;box-shadow:inset 3px 0 #e8a06a}
+html[data-theme="dark"] .nav-item.active span{background:#443529;color:#ffd0a6;box-shadow:none}
+html[data-theme="dark"] .exam-card{background:linear-gradient(145deg,#302923,#262421);border-color:#484037;color:var(--ink)}
+html[data-theme="dark"] .mini-icon{background:#403127;color:#ffd0a6}
+html[data-theme="dark"] .account-area{border-top-color:var(--line)}
+html[data-theme="dark"] .profile-link{background:transparent;border-color:#403a33;box-shadow:none}
+html[data-theme="dark"] .profile-link:hover{background:#302c27}
+html[data-theme="dark"] .avatar{background:#493528;color:#ffd0a6;border-color:#292622;box-shadow:0 0 0 1px #514033}
+html[data-theme="dark"] .account-logout{background:#2b2824;color:#c9c0b5;border-color:#484139}
+html[data-theme="dark"] .account-logout:hover{background:#422c26;color:#ffd0a6;border-color:#76503a}
+html[data-theme="dark"] .topbar{background:rgba(25,24,23,.92);border-color:#38342f}
+html[data-theme="dark"] .breadcrumb{color:#a49c91}
+html[data-theme="dark"] .breadcrumb b,html[data-theme="dark"] h1,html[data-theme="dark"] h2,html[data-theme="dark"] h3,html[data-theme="dark"] h4,html[data-theme="dark"] label{color:var(--ink)}
+html[data-theme="dark"] .lead,html[data-theme="dark"] .section-heading p,html[data-theme="dark"] .profile-link small,html[data-theme="dark"] .exam-card p{color:var(--muted)}
+html[data-theme="dark"] .eyebrow,html[data-theme="dark"] .text-button,html[data-theme="dark"] .document-ask summary{color:#f0b27e}
+html[data-theme="dark"] .hero{background:radial-gradient(circle at 82% 18%,rgba(232,160,106,.18),transparent 29%),linear-gradient(125deg,#29231f,#3b2d25 72%,#4a3428);box-shadow:0 24px 50px #0004}
+html[data-theme="dark"] .hero-tag{color:#ffd0a6}
+html[data-theme="dark"] .hero h2{color:#fff8ef}
+html[data-theme="dark"] .hero p{color:#e1d5c8}
+html[data-theme="dark"] .button-primary{background:#e8a06a;color:#211a15}
+html[data-theme="dark"] .button-primary:hover{background:#f1b27f}
+html[data-theme="dark"] .button-gold{background:#f2c18f;color:#211a15}
+html[data-theme="dark"] .button-light{background:#3b3027;color:#ffd0a6}
+html[data-theme="dark"] .status-dot{background:#e7b17e}
+html[data-theme="dark"] .stat-card,html[data-theme="dark"] .subject-card,html[data-theme="dark"] .form-card,html[data-theme="dark"] .practice-card,html[data-theme="dark"] .record,html[data-theme="dark"] .lesson-panel,html[data-theme="dark"] .tip-card,html[data-theme="dark"] .tutor-context-card,html[data-theme="dark"] .tutor-recent-card,html[data-theme="dark"] .tutor-shortcuts{background:#262421;color:var(--ink);border-color:#3b3833;box-shadow:0 10px 30px #0002}
+html[data-theme="dark"] .stat-card:hover,html[data-theme="dark"] .subject-card:hover{background:#2b2824;border-color:#66503e;box-shadow:0 14px 32px #0004}
+html[data-theme="dark"] input,html[data-theme="dark"] textarea,html[data-theme="dark"] select,html[data-theme="dark"] .tutor-composer,html[data-theme="dark"] .tutor-controls select{background:#211f1c;color:var(--ink);border-color:#49443c}
+html[data-theme="dark"] input::placeholder,html[data-theme="dark"] textarea::placeholder{color:#92897e}
+html[data-theme="dark"] .icon-button{background:#292622;color:var(--ink);border-color:#484139}
+html[data-theme="dark"] .icon-button:hover{background:#393027;border-color:#72543d}
+html[data-theme="dark"] .progress-line{background:#403b34}
+html[data-theme="dark"] .progress-line span{background:linear-gradient(90deg,#d98c58,#f2c18f)}
+html[data-theme="dark"] .profile-photo-preview,html[data-theme="dark"] .document-type,html[data-theme="dark"] .notification-icon{background:#393027;color:#ffd0a6;border-color:#514033}
+html[data-theme="dark"] .ai-answer{background:#302922;color:#f2efe9;border:1px solid #494037}
+html[data-theme="dark"] .tutor-prompt-grid button{background:#2b2824;border-color:#494139;color:#f2efe9}
+html[data-theme="dark"] .from-user .message-content{background:#443226;color:#fff1e3}
+html[data-theme="dark"] .from-user .message-avatar{background:#493528;color:#ffd0a6}
+html[data-theme="dark"] .tutor-saved-chat{color:#e8e0d6}
+html[data-theme="dark"] .tutor-saved-chat:hover,html[data-theme="dark"] .tutor-saved-chat.active{background:#302922;border-color:#514033}
+html[data-theme="dark"] .saved-chat-icon{background:#403127;color:#ffd0a6}
+html[data-theme="dark"] .tutor-math,html[data-theme="dark"] .tutor-math-inline{background:#211f1c;color:#f2efe9}
+html[data-theme="dark"] #view-profile .auth-card{background:linear-gradient(155deg,#292622,#211f1c);border-color:#484139;box-shadow:0 22px 60px #0004}
+html[data-theme="dark"] #view-profile .auth-card .auth-toggle{background:#211f1c;border-color:#484139}
+html[data-theme="dark"] #view-profile .auth-card .auth-toggle button{color:#b9b0a5}
+html[data-theme="dark"] #view-profile .auth-card .auth-toggle button.selected{background:#403127;color:#fff0e1;box-shadow:0 3px 12px #0004}
+html[data-theme="dark"] #view-profile .auth-card>label:not(.hidden){color:#e2d9ce}
+html[data-theme="dark"] #view-profile .auth-card>label input{background:#211f1c;color:#f2efe9;border-color:#49443c}
+html[data-theme="dark"] #view-profile #google-signin-button{background:#fff}
+html[data-theme="dark"] .auth-divider:before,html[data-theme="dark"] .auth-divider:after{background:#49443c}
+html[data-theme="dark"] .auth-divider{color:#b9b0a5}
+html[data-theme="dark"] button:focus-visible,html[data-theme="dark"] a:focus-visible,html[data-theme="dark"] input:focus-visible,html[data-theme="dark"] textarea:focus-visible,html[data-theme="dark"] select:focus-visible{outline-color:rgba(242,193,143,.55)}
