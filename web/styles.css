@@ -1056,3 +1056,24 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 @media(min-width:901px){
   #app-sidebar #sidebar-collapse-toggle{right:-3px!important}
 }
+
+
+/* Refined grip styling: let the tab tuck beneath the sidebar edge, with
+   2px more vertical length (42px -> 44px). */
+@media(min-width:901px){
+  #app-sidebar.sidebar{overflow:hidden!important}
+  #app-sidebar #sidebar-collapse-toggle{
+    right:-3px!important;
+    width:24px!important;
+    height:44px!important;
+    transform:translate(0,-50%) rotate(180deg)!important;
+    transform-origin:center center!important;
+    border:1px solid #E2E4EF!important;
+    border-radius:9px!important;
+    z-index:102!important;
+  }
+  #app-sidebar #sidebar-collapse-toggle:hover,
+  #app-sidebar #sidebar-collapse-toggle:active{
+    transform:translate(0,-50%) rotate(180deg)!important;
+  }
+}
