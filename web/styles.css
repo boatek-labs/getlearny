@@ -1050,3 +1050,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 @media(min-width:901px){
   #app-sidebar #sidebar-collapse-toggle{right:-1px!important}
 }
+
+
+/* User adjustment: move the grip another 2px left, to -3px. */
+@media(min-width:901px){
+  #app-sidebar #sidebar-collapse-toggle{right:-3px!important}
+}
