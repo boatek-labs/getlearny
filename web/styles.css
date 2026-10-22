@@ -1077,3 +1077,32 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     transform:translate(0,-50%) rotate(180deg)!important;
   }
 }
+
+
+/* Layering correction: sidebar shell and grip must sit above the dashboard.
+   The scroll area stays below the grip, and the grip tucks into the sidebar edge. */
+@media(min-width:901px){
+  #app-sidebar.sidebar{
+    z-index:1000!important;
+    overflow:hidden!important;
+  }
+  #app-sidebar .sidebar-scroll{
+    position:absolute!important;
+    z-index:1!important;
+  }
+  #app-sidebar #sidebar-collapse-toggle{
+    z-index:1002!important;
+    right:-3px!important;
+    transform:translate(0,-50%) rotate(180deg)!important;
+    height:44px!important;
+    pointer-events:auto!important;
+  }
+  #app-sidebar #sidebar-collapse-toggle:hover,
+  #app-sidebar #sidebar-collapse-toggle:active{
+    transform:translate(0,-50%) rotate(180deg)!important;
+  }
+  .main{
+    position:relative;
+    z-index:0!important;
+  }
+}
