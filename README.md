@@ -64,14 +64,26 @@ In the Android app, open a subject while online and choose **Download next 3 les
 ## Current functionality
 - SHS/WASSCE-oriented subject paths and practice
 - Gemini-powered lessons, practice generation, grading feedback, scanned-PDF OCR, and document tutoring; failed AI requests are reported rather than replaced with fake content
-- Registration/login with hashed passwords and expiring JWTs
+- Registration/login with hashed passwords and expiring JWTs; browser signup supports six-digit email verification codes with a 10-minute expiry and attempt limits
 - User-scoped learning logs, test results, and journal entries
 - PostgreSQL migration runner with migration history
 - PDF/plain-text/image uploads with selectable-text extraction, Tesseract OCR for images, and Gemini multimodal OCR fallback for scanned PDFs up to 6 MB; OCR results should still be reviewed for accuracy
 - Responsive browser app and Flutter client using the hosted API by default
 
 ## Production checklist
-Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, email verification and password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Google OAuth, email verification, password reset, background web push, and stable Android release signing still require their real provider credentials/configuration. Image OCR is local via Tesseract; scanned-PDF OCR uses Gemini where supported.
+Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Browser email verification requires a Resend API key and a sender address on a verified domain; Google OAuth, password reset, background web push, and stable Android release signing still require their real provider credentials/configuration. Image OCR is local via Tesseract; scanned-PDF OCR uses Gemini where supported.
+
+
+### Email verification for browser signup
+
+The browser signup flow sends a six-digit code through Resend before creating the account. Codes expire after 10 minutes, are stored as hashes, and are limited to five verification requests/attempts per 15-minute window. Configure these API environment variables in Vercel and in `api/.env` for local development:
+
+```dotenv
+RESEND_API_KEY=re_your_resend_api_key
+EMAIL_FROM=GetLearny <verify@your-verified-domain.com>
+```
+
+Verify the sender domain in Resend before sending to real learners. Keep the API key server-side; never add it to browser JavaScript or Flutter configuration. If the variables are missing, signup displays a configuration error rather than pretending an email was sent.
 
 ## Gemini AI environment template
 
