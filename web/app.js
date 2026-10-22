@@ -210,3 +210,12 @@ window.addEventListener('unhandledrejection',event=>{console.error('GetLearny as
 window.addEventListener('offline',()=>{$('#connection').textContent='Device offline · local mode';$('.status-dot').style.background='#d65c55';});
 window.addEventListener('online',()=>{$('#connection').textContent='Reconnecting…';$('.status-dot').style.background='#f0b84d';loadDashboard();});
 setupNotifications();const now=new Date();$('#today').textContent=now.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}).toUpperCase();if(state.api&&$('#api-url'))$('#api-url').value=state.api;loadDashboard();
+
+// Open the requested account mode when arriving from the public marketing homepage.
+const requestedAuthMode = new URLSearchParams(window.location.search).get('auth');
+if (!state.token && (requestedAuthMode === 'login' || requestedAuthMode === 'signup')) {
+  showView('profile');
+  setRegister(requestedAuthMode === 'signup');
+  setupGoogleSignIn();
+  window.setTimeout(() => $('#auth-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
+}
