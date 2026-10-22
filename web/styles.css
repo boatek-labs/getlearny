@@ -920,3 +920,40 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
    transform:translateY(-50%)!important;
  }
 }
+
+
+/* Separate the fixed sidebar shell from its scrolling content. The grip
+   is a sibling of .sidebar-scroll, so scrolling menu items cannot move it. */
+@media(min-width:901px){
+ #app-sidebar.sidebar{
+   position:fixed!important;inset:0 auto 0 0!important;
+   height:100vh!important;height:100dvh!important;
+   overflow:hidden!important;overflow-x:hidden!important;overflow-y:hidden!important;
+   padding:0!important;display:block!important;
+   width:var(--gl-sidebar-width,264px)!important;
+   box-sizing:border-box!important;
+ }
+ #app-sidebar .sidebar-scroll{
+   position:absolute;inset:0;
+   overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
+   scrollbar-width:none;-ms-overflow-style:none;
+   padding:26px 18px 16px;box-sizing:border-box;
+   display:flex;flex-direction:column;
+ }
+ #app-sidebar .sidebar-scroll::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+ #app-sidebar #sidebar-collapse-toggle{
+   position:absolute!important;top:50%!important;right:0!important;left:auto!important;bottom:auto!important;
+   transform:translateY(-50%)!important;z-index:100!important;
+   width:24px!important;height:42px!important;box-sizing:border-box!important;
+   border:1px solid #E2E4EF!important;border-right:0!important;
+   border-radius:9px 0 0 9px!important;margin:0!important;
+   touch-action:none!important;cursor:ew-resize!important;
+ }
+ #app-sidebar #sidebar-collapse-toggle:hover,
+ #app-sidebar #sidebar-collapse-toggle:active{transform:translateY(-50%)!important}
+ body.sidebar-collapsed #app-sidebar .sidebar-scroll{padding-left:10px;padding-right:10px}
+}
+@media(max-width:900px){
+ #app-sidebar .sidebar-scroll{overflow-y:auto;scrollbar-width:none}
+ #app-sidebar .sidebar-scroll::-webkit-scrollbar{display:none!important;width:0!important}
+}
