@@ -715,3 +715,15 @@ html[data-theme="dark"] #view-profile #google-signin-button {
   margin-left: 0 !important;
   margin-right: auto !important;
 }
+
+/* Align the white homepage signup pill with the primary hero button above it. */
+#view-home .hero-copy > .home-signup {
+  margin-left: 0 !important;
+}
+@media (max-width: 600px) {
+  #view-home .hero-copy > .home-signup {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100%;
+  }
+}
