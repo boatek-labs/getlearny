@@ -888,3 +888,35 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
  body.sidebar-collapsed .sidebar{width:var(--gl-sidebar-width)!important}
  body.sidebar-collapsed .main{margin-left:var(--gl-sidebar-width)!important;width:calc(100% - var(--gl-sidebar-width))!important}
 }
+
+
+/* Final geometry correction: the grip belongs to the sidebar itself,
+   sits at its vertical midpoint, and is anchored exactly to its right edge. */
+@media(min-width:901px){
+ #app-sidebar.sidebar{
+   position:fixed!important;
+   overflow-x:visible!important;
+ }
+ #app-sidebar #sidebar-collapse-toggle{
+   position:absolute!important;
+   top:50%!important;
+   right:0!important;
+   left:auto!important;
+   bottom:auto!important;
+   margin:0!important;
+   transform:translateY(-50%)!important;
+   width:24px!important;
+   height:42px!important;
+   box-sizing:border-box!important;
+   border:1px solid #E2E4EF!important;
+   border-right:0!important;
+   border-radius:9px 0 0 9px!important;
+   z-index:100!important;
+ }
+ #app-sidebar #sidebar-collapse-toggle:hover{
+   transform:translateY(-50%)!important;
+ }
+ #app-sidebar #sidebar-collapse-toggle:active{
+   transform:translateY(-50%)!important;
+ }
+}
