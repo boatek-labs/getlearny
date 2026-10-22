@@ -142,6 +142,39 @@ app.post('/api/v1/notifications/test',auth,asyncRoute(async(req,res)=>{
 }));
 
 app.get('/api/v1/health',asyncRoute(async(_req,res)=>{const db=await health();res.status(db.configured&&!db.connected?503:200).json({status:db.connected?'ok':db.configured?'degraded':'unconfigured',service:'getlearny-api',database:db,now:new Date().toISOString()})}));
+app.get('/api/v1/auth/config',(req,res)=>res.json({googleClientId:process.env.GOOGLE_CLIENT_ID||''}));
+app.post('/api/v1/auth/google',asyncRoute(async(req,res)=>{
+ if(!envReady())return fail(res,503,'Authentication is not configured');
+ const credential=typeof req.body?.credential==='string'?req.body.credential:'';
+ if(!credential||credential.length>10000)return fail(res,400,'Google sign-in credential is missing or invalid');
+ const clientId=process.env.GOOGLE_CLIENT_ID;
+ if(!clientId)return fail(res,503,'Google sign-in is not configured yet. Add GOOGLE_CLIENT_ID in Vercel.');
+ let claims;
+ try{
+  const verify=await fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(credential),{signal:AbortSignal.timeout(8000)});
+  if(!verify.ok)return fail(res,401,'Google could not verify this sign-in. Please try again.');
+  claims=await verify.json();
+ }catch{return fail(res,502,'Could not reach Google to verify sign-in. Please try again.')}
+ if(claims.aud!==clientId||claims.email_verified!==true||!claims.email||!claims.sub)return fail(res,401,'Google account verification failed.');
+ const email=String(claims.email).trim().toLowerCase();
+ const displayName=String(claims.name||claims.given_name||email.split('@')[0]).trim().slice(0,120);
+ let found=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,created_at FROM users WHERE email=$1',[email]);
+ let user=found.rows[0];
+ if(!user){
+  const passwordHash=await bcrypt.hash(randomUUID()+randomUUID(),12);
+  try{
+   const created=await query("INSERT INTO users(name,email,password_hash,class_level,subjects) VALUES($1,$2,$3,$4,$5) RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at",[displayName,email,passwordHash,'',[]]);
+   user=created.rows[0];
+  }catch(error){
+   if(error.code!=='23505')throw error;
+   found=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,created_at FROM users WHERE email=$1',[email]);
+   user=found.rows[0];
+   if(!user)throw error;
+  }
+ }
+ const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});
+ res.json({token,user,created:!found.rowCount});
+}));
 app.post('/api/v1/auth/register',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=registration.safeParse(req.body);if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);const {name,email,password,class_level}=parsed.data;const subjects=normalizeSubjectList(parsed.data.subjects);const hash=await bcrypt.hash(password,12);try{const r=await query('INSERT INTO users(name,email,password_hash,class_level,subjects) VALUES($1,$2,$3,$4,$5) RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at',[name,email.toLowerCase(),hash,class_level,subjects]);const user=r.rows[0];const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.status(201).json({token,user})}catch(e){if(e.code==='23505')return fail(res,409,'An account with this email already exists');throw e}}));
 app.post('/api/v1/auth/login',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=login.safeParse(req.body);if(!parsed.success)return fail(res,400,'Enter a valid email and password');const r=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,password_hash,created_at FROM users WHERE email=$1',[parsed.data.email.toLowerCase()]);const user=r.rows[0];if(!user||!await bcrypt.compare(parsed.data.password,user.password_hash))return fail(res,401,'Email or password is incorrect');delete user.password_hash;const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.json({token,user})}));
 app.get('/api/v1/me',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,created_at FROM users WHERE id=$1',[req.user.sub]);if(!r.rowCount)return fail(res,404,'Account not found');res.json({user:r.rows[0]})}));
