@@ -155,7 +155,7 @@ app.post('/api/v1/auth/google',asyncRoute(async(req,res)=>{
   if(!verify.ok)return fail(res,401,'Google could not verify this sign-in. Please try again.');
   claims=await verify.json();
  }catch{return fail(res,502,'Could not reach Google to verify sign-in. Please try again.')}
- if(claims.aud!==clientId||claims.email_verified!==true||!claims.email||!claims.sub)return fail(res,401,'Google account verification failed.');
+ if(claims.aud!==clientId||(claims.email_verified!==true&&claims.email_verified!=='true')||!claims.email||!claims.sub)return fail(res,401,'Google account verification failed.');
  const email=String(claims.email).trim().toLowerCase();
  const displayName=String(claims.name||claims.given_name||email.split('@')[0]).trim().slice(0,120);
  let found=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,created_at FROM users WHERE email=$1',[email]);
