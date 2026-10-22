@@ -99,6 +99,7 @@ export async function generateWithGemini({system,user,maxOutputTokens=1500,tempe
 }
 const fail=(res,status,error)=>res.status(status).json({error});
 const envReady=()=>Boolean(process.env.JWT_SECRET&&process.env.JWT_SECRET.length>=32);
+const emailOtpLimiter=rateLimit({windowMs:15*60*1000,limit:5,standardHeaders:true,legacyHeaders:false,message:{error:'Too many email verification requests. Wait 15 minutes and try again.'}});
 const pushReady=()=>Boolean(process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT);
 function configurePush(){if(pushReady())webPush.setVapidDetails(process.env.VAPID_SUBJECT,process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY)}
 configurePush();
@@ -175,7 +176,7 @@ app.post('/api/v1/auth/google',asyncRoute(async(req,res)=>{
  const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});
  res.json({token,user,created:!found.rowCount});
 }));
-app.post('/api/v1/auth/register/request-otp',asyncRoute(async(req,res)=>{
+app.post('/api/v1/auth/register/request-otp',emailOtpLimiter,asyncRoute(async(req,res)=>{
  if(!envReady())return fail(res,503,'Authentication is not configured');
  if(!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM)return fail(res,503,'Email verification is not configured. Add RESEND_API_KEY and EMAIL_FROM in Vercel, then redeploy.');
  const parsed=registration.safeParse(req.body);
@@ -194,7 +195,7 @@ app.post('/api/v1/auth/register/request-otp',asyncRoute(async(req,res)=>{
  if(!mail.ok){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,502,'The verification email could not be sent. Check the email service configuration and try again.')}
  res.status(202).json({message:'Verification code sent. Check your inbox and spam folder.',email,expiresInSeconds:600});
 }));
-app.post('/api/v1/auth/register/verify-otp',asyncRoute(async(req,res)=>{
+app.post('/api/v1/auth/register/verify-otp',emailOtpLimiter,asyncRoute(async(req,res)=>{
  if(!envReady())return fail(res,503,'Authentication is not configured');
  const parsed=z.object({email:z.string().trim().email().max(254),code:z.string().regex(/^\d{6}$/)}).safeParse(req.body);
  if(!parsed.success)return fail(res,400,'Enter the email address and the 6-digit code.');
