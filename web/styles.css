@@ -658,3 +658,50 @@ html[data-theme="dark"] #view-profile .api-settings{border-color:#34324f}
 }
 #view-profile #google-signin-button:hover{border:0;box-shadow:none}
 html[data-theme="dark"] #view-profile #google-signin-button{background:transparent;border:0}
+
+/* Fix Google Identity iframe stretching across the auth card and leaving a white gutter. */
+#view-profile #google-signin-wrap {
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+}
+#view-profile #google-signin-button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: min(280px, 100%);
+  max-width: 100%;
+  min-height: 44px;
+  height: 44px;
+  margin: 0 auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  line-height: normal;
+}
+#view-profile #google-signin-button iframe {
+  display: block !important;
+  flex: 0 1 280px;
+  width: 280px !important;
+  max-width: 100% !important;
+  height: 44px !important;
+  margin: 0 auto !important;
+  border: 0 !important;
+}
+#view-profile #google-signin-button:hover {
+  border: 0;
+  box-shadow: none;
+}
+html[data-theme="dark"] #view-profile #google-signin-button {
+  background: transparent;
+}
+@media (max-width: 360px) {
+  #view-profile #google-signin-button,
+  #view-profile #google-signin-button iframe {
+    width: 100% !important;
+  }
+}
