@@ -783,3 +783,22 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .faq-list details p{color:var(--muted);line-height:1.8;margin:-3px 35px 22px 0;font-size:14px}
 .nav-dashboard{font-weight:750}
 @media(max-width:760px){.faq-section{grid-template-columns:1fr;gap:28px;padding-top:70px;padding-bottom:75px}.faq-list summary{font-size:14px;padding:19px 0}}
+
+/* Keep the refreshed workspace fully readable in dark mode too. */
+html[data-theme="dark"] .sidebar{background:linear-gradient(180deg,#17182b 0%,#141526 100%);border-right-color:#303148;box-shadow:8px 0 30px rgba(0,0,0,.12)}
+html[data-theme="dark"] .side-label{color:#8d8ca9}
+html[data-theme="dark"] .nav-item{color:#b9b8d0}
+html[data-theme="dark"] .nav-item:hover{background:#22223a;border-color:#33314f;color:#e6e1ff}
+html[data-theme="dark"] .nav-item.active{background:linear-gradient(100deg,#292443,#22213a);color:#d8d0ff;border-color:#393353;box-shadow:inset 3px 0 #9a88ff}
+html[data-theme="dark"] .nav-item.active span{background:#343052;box-shadow:none}
+html[data-theme="dark"] .exam-card{background:linear-gradient(145deg,#202039,#172633);border-color:#30334c}
+html[data-theme="dark"] .mini-icon{background:#292443;color:#d4cbff}
+html[data-theme="dark"] .profile-link{background:transparent;color:#f0f0fa}
+html[data-theme="dark"] .profile-link:hover{background:#22223a}
+html[data-theme="dark"] .account-area{border-top-color:#303148}
+html[data-theme="dark"] .account-logout{background:#1a1b30;color:#b9b8d0;border-color:#393653}
+html[data-theme="dark"] .account-logout:hover{background:#35202b;color:#ffb8c3;border-color:#69404d}
+html[data-theme="dark"] .topbar{background:rgba(20,21,38,.91);border-bottom-color:#303148}
+html[data-theme="dark"] .icon-button{background:#1a1b30;border-color:#34324f;color:#e7e5f6}
+html[data-theme="dark"] .icon-button:hover{background:#25243f;border-color:#514a79}
+html[data-theme="dark"] .stat-card,html[data-theme="dark"] .subject-card,html[data-theme="dark"] .tip-card,html[data-theme="dark"] .form-card,html[data-theme="dark"] .practice-card,html[data-theme="dark"] .tutor-context-card,html[data-theme="dark"] .tutor-recent-card,html[data-theme="dark"] .tutor-shortcuts{box-shadow:none}
