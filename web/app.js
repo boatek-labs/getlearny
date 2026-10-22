@@ -159,6 +159,21 @@ async function uploadStudyMaterialToCloudinary(file,subjectName,materialTitle,on
 async function loadDocuments(){if(!state.token){$('#document-list').innerHTML='<article class="record"><p>Sign in to upload and access your private study materials.</p><button class="button button-primary" id="document-signin" type="button">Open account</button></article>';const b=$('#document-signin');if(b)b.onclick=()=>showView('profile');return;}try{const r=await api('/documents');renderDocuments(r.documents||[])}catch(e){$('#document-list').innerHTML='<article class="record"><p>'+esc(e.message)+'</p></article>';}}
 
 function closeMobileNav(){document.body.classList.remove('mobile-nav-open');const toggle=$('#mobile-menu-toggle');if(toggle)toggle.setAttribute('aria-expanded','false');}
+const sidebarCollapseToggle=$('#sidebar-collapse-toggle');
+if(sidebarCollapseToggle){
+  const collapsed=localStorage.getItem('gl_sidebar_collapsed')==='1';
+  document.body.classList.toggle('sidebar-collapsed',collapsed);
+  sidebarCollapseToggle.setAttribute('aria-pressed',String(collapsed));
+  sidebarCollapseToggle.setAttribute('aria-label',collapsed?'Expand sidebar':'Collapse sidebar');
+  sidebarCollapseToggle.title=collapsed?'Expand sidebar':'Collapse sidebar';
+  sidebarCollapseToggle.addEventListener('click',()=>{
+    const next=document.body.classList.toggle('sidebar-collapsed');
+    localStorage.setItem('gl_sidebar_collapsed',next?'1':'0');
+    sidebarCollapseToggle.setAttribute('aria-pressed',String(next));
+    sidebarCollapseToggle.setAttribute('aria-label',next?'Expand sidebar':'Collapse sidebar');
+    sidebarCollapseToggle.title=next?'Expand sidebar':'Collapse sidebar';
+  });
+}
 $('#mobile-menu-toggle')?.addEventListener('click',()=>{const open=!document.body.classList.contains('mobile-nav-open');document.body.classList.toggle('mobile-nav-open',open);$('#mobile-menu-toggle').setAttribute('aria-expanded',String(open));});
 $('#mobile-nav-backdrop')?.addEventListener('click',closeMobileNav);
 $('#nav')?.addEventListener('click',event=>{if(event.target.closest('[data-view]'))closeMobileNav();});
