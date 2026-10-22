@@ -849,3 +849,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 }
 @media(max-width:900px){#sidebar-collapse-toggle{display:none!important}.sidebar{scrollbar-width:none!important}.sidebar::-webkit-scrollbar{display:none!important;width:0!important}}
 @media(prefers-reduced-motion:reduce){.sidebar,.main,#sidebar-collapse-toggle,#sidebar-collapse-toggle span{transition:none!important}}
+
+/* Tight, responsive Google sign-in and email OTP states. */
+#view-profile .google-signin-wrap{width:100%;align-items:stretch;gap:9px;margin-top:4px;padding:0;background:transparent;border:0;box-shadow:none}
+#view-profile #google-signin-button{display:flex;justify-content:center;align-items:center;width:100%;min-height:44px;padding:0;background:transparent;border:0;box-shadow:none;overflow:hidden}
+#view-profile #google-signin-button iframe{max-width:100%!important}
+#view-profile .auth-card #otp-wrap{padding:13px 14px;border:1px solid #dcd7fb;border-radius:14px;background:#f8f7ff}
+#view-profile .auth-card #otp-wrap input{letter-spacing:.28em;font-weight:800;text-align:center;font-size:19px}
+#view-profile .auth-card #resend-otp{justify-self:start;margin-top:-9px}
+html[data-theme="dark"] #view-profile .auth-card #otp-wrap{background:#1d1b30;border-color:#49416d}
+@media(max-width:600px){#view-profile #google-signin-button{min-height:42px}#view-profile .auth-card #otp-wrap input{font-size:18px}}
