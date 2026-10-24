@@ -6,7 +6,35 @@ const state = {registrationOtpPending:false,selectedTopic:null,view:'home',regis
 const $=s=>document.querySelector(s);const $$=s=>[...document.querySelectorAll(s)];
 function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2500)}
-function api(path,opts={}){if(!state.api)throw new Error('Set the API base URL in your account settings to sync data.');const isForm=opts.body instanceof FormData;const {timeoutMs,...fetchOpts}=opts;const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),timeoutMs||(isForm?90000:45000));return fetch(state.api.replace(/\/$/,'')+path,{...fetchOpts,signal:opts.signal||controller.signal,headers:{...(!isForm?{'Content-Type':'application/json'}:{}),...(state.token?{Authorization:'Bearer '+state.token}:{}),...(opts.headers||{})}}).then(async r=>{const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed ('+r.status+')');return d}).catch(error=>{if(error.name==='AbortError')throw new Error('Connection timed out. Check your internet connection and API URL, then retry.');throw error}).finally(()=>clearTimeout(timeout))}
+async function api(path,opts={}) {
+ if(!state.api)state.api=DEFAULT_API;
+ const isForm=opts.body instanceof FormData;
+ const {timeoutMs,...fetchOpts}=opts;
+ async function request(base){
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),timeoutMs||(isForm?90000:45000));
+  try{
+   const response=await fetch(String(base).replace(/\/$/,'')+path,{...fetchOpts,signal:opts.signal||controller.signal,headers:{...(!isForm?{'Content-Type':'application/json'}:{}),...(state.token?{Authorization:'Bearer '+state.token}:{}),...(opts.headers||{})}});
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok){const error=new Error(data.error||'Request failed ('+response.status+')');error.status=response.status;throw error;}
+   return data;
+  }catch(error){
+   if(error.name==='AbortError')throw new Error('Connection timed out. Check your internet connection, then retry.');
+   throw error;
+  }finally{clearTimeout(timeout);}
+ }
+ try{return await request(state.api);}
+ catch(error){
+  const recoverable=error instanceof TypeError||[404,502,503,504].includes(error.status);
+  if(state.api!==DEFAULT_API&&recoverable){
+   console.warn('Saved GetLearny API URL failed; retrying same-origin API.',error.message);
+   state.api=DEFAULT_API;
+   try{localStorage.setItem('gl_api',DEFAULT_API);}catch{}
+   return request(DEFAULT_API);
+  }
+  throw error;
+ }
+}
 function showView(view){state.view=view;$$('.view').forEach(el=>el.classList.toggle('active',el.id===`view-${view}`));$$('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.view===view));$('#crumb').textContent=({home:'Overview',subjects:'My subjects',tutor:'AI tutor',practice:'Practice',journal:'Learning journal',tests:'Test tracker',documents:'Study files',notifications:'Notifications',profile:'Account'})[view]||view;window.scrollTo({top:0,behavior:'smooth'});if(view==='practice')renderQuiz();if(view==='profile')fillProfile();if(view==='subjects')renderSubjects();if(view==='tutor'){renderTutorMessages();initTutor();}if(view==='documents')loadDocuments();if(view==='notifications')loadNotificationSettings();}
 function subjectIdentity(value){const cleaned=String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase();const aliases={'english':'english language','core math':'core mathematics','core maths':'core mathematics','math':'core mathematics','maths':'core mathematics','add math':'additional mathematics','add maths':'additional mathematics','elective mathematics':'additional mathematics','elective maths':'additional mathematics','comp sci':'computer science','computer science':'computer science','social studies':'social studies','ict':'ict'};return aliases[cleaned]||cleaned}
 function getLearnerSubjects(){const raw=Array.isArray(state.user?.subjects)?state.user.subjects:[];const seen=new Set();return raw.map(s=>String(s??'').trim().replace(/\s+/g,' ')).filter(s=>{if(!s)return false;const key=subjectIdentity(s);if(seen.has(key))return false;seen.add(key);return true})}

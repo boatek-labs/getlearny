@@ -5,7 +5,28 @@ let mode='login',otpPending=false,busy=false,googleClientId='',googleReady=false
 const base=()=>{try{return String(localStorage.getItem('gl_api')||'/api/v1').replace(/\/$/,'')}catch{return'/api/v1'}};
 const hasToken=()=>{try{return!!localStorage.getItem('gl_token')}catch{return false}};
 const msg=t=>$('#landing-auth-message').textContent=t||'';
-async function api(path,body,method='POST'){const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),45000);try{const r=await fetch(base()+path,{method,signal:ctrl.signal,headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Request failed ('+r.status+').');return d}catch(e){if(e.name==='AbortError')throw Error('Request timed out. Check your connection and try again.');throw e}finally{clearTimeout(timer)}}
+async function api(path,body,method='POST'){
+ async function request(urlBase){
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),45000);
+  try{
+   const r=await fetch(urlBase+path,{method,signal:ctrl.signal,headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
+   const d=await r.json().catch(()=>({}));
+   if(!r.ok){const error=Error(d.error||'Request failed ('+r.status+').');error.status=r.status;throw error;}
+   return d;
+  }catch(e){if(e.name==='AbortError')throw Error('Request timed out. Check your connection and try again.');throw e;}
+  finally{clearTimeout(timer);}
+ }
+ const saved=base();
+ try{return await request(saved);}
+ catch(e){
+  const recoverable=e instanceof TypeError||[404,502,503,504].includes(e.status);
+  if(saved!=='/api/v1'&&recoverable){
+   try{localStorage.setItem('gl_api','/api/v1')}catch{}
+   return request('/api/v1');
+  }
+  throw e;
+ }
+}
 function session(d){if(!d||typeof d.token!=='string'||!d.token||!d.user||typeof d.user!=='object')throw Error('The server did not return a valid session. Please try again.');try{localStorage.setItem('gl_token',d.token);localStorage.setItem('gl_user',JSON.stringify(d.user))}catch{throw Error('Browser storage is blocked. Enable site storage and try again.')}location.assign('/app.html')}
 function setMode(m){mode=m;otpPending=false;$('#landing-login-mode').classList.toggle('selected',m==='login');$('#landing-register-mode').classList.toggle('selected',m==='signup');$('#landing-login-mode').setAttribute('aria-pressed',String(m==='login'));$('#landing-register-mode').setAttribute('aria-pressed',String(m==='signup'));$('#auth-dialog-title').textContent=m==='signup'?'Create your learning space.':'Welcome back.';$('#auth-dialog-subtitle').textContent=m==='signup'?'One account for your subjects, materials, and progress.':'Sign in to continue where you left off.';$('#landing-name-wrap').hidden=m!=='signup';$('#landing-level-wrap').hidden=m!=='signup';$('#landing-subjects-wrap').hidden=m!=='signup';$('#landing-otp-wrap').hidden=true;$('#landing-resend-otp').hidden=true;$('input[name=verification_code]',form).required=false;$('input[name=password]',form).autocomplete=m==='signup'?'new-password':'current-password';$('#landing-auth-submit').innerHTML=(m==='signup'?'Create account':'Sign in')+' <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>';$('#landing-google-button').replaceChildren();otpPending=false}
 function open(m){focusBefore=document.activeElement;form.reset();setMode(m);msg('');overlay.hidden=false;overlay.setAttribute('aria-hidden','false');document.body.classList.add('auth-open');dialog.focus();setTimeout(()=>$('input[name=email]',form)?.focus(),0);if(history.replaceState){const u=new URL(location.href);u.searchParams.set('auth',m);history.replaceState({},'',u.pathname+u.search+u.hash)}setupGoogle()}
