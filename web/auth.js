@@ -2,7 +2,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)], overlay=$('#auth-overlay'),dialog=$('.auth-dialog',overlay),form=$('#landing-auth-form');
 if(!overlay||!dialog||!form)return;
 let mode='login',otpPending=false,busy=false,googleClientId='',googleReady=false,focusBefore=null;
-const base=()=>{try{return(localStorage.getItem('gl_api')||'/api/v1').replace(/\\/$/,'')}catch{return'/api/v1'}};
+const base=()=>{try{return String(localStorage.getItem('gl_api')||'/api/v1').replace(/\/$/,'')}catch{return'/api/v1'}};
 const hasToken=()=>{try{return!!localStorage.getItem('gl_token')}catch{return false}};
 const msg=t=>$('#landing-auth-message').textContent=t||'';
 async function api(path,body,method='POST'){const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),45000);try{const r=await fetch(base()+path,{method,signal:ctrl.signal,headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Request failed ('+r.status+').');return d}catch(e){if(e.name==='AbortError')throw Error('Request timed out. Check your connection and try again.');throw e}finally{clearTimeout(timer)}}
