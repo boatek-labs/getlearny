@@ -66,3 +66,13 @@
 @media(max-width:760px){.faq-section{grid-template-columns:minmax(0,1fr);gap:29px;padding:65px 18px 72px}.faq-intro{position:relative;top:auto;max-width:560px}.faq-intro h2{margin:17px 0 13px;font-size:clamp(34px,9vw,45px);letter-spacing:-1.6px}.faq-intro>p{font-size:13px;line-height:1.75}.faq-dashboard-link{margin-top:17px}.faq-list{gap:9px}.faq-list details{border-radius:15px}.faq-list summary{padding:17px 14px 17px 16px;gap:12px;font-size:13px}.faq-list summary>span{width:28px;height:28px;flex-basis:28px}.faq-list details>p{padding:0 18px 19px 16px;font-size:12px;line-height:1.8}}
 @media(max-width:370px){.faq-section{padding-left:15px;padding-right:15px}.faq-list summary{font-size:12px}.faq-intro h2{font-size:32px}}
 @media(prefers-reduced-motion:reduce){.faq-list details,.faq-list summary>span,.faq-dashboard-link span{transition:none}}
+
+/* Global student positioning and clearer landing-page dashboard CTA */
+.nav-dashboard{display:inline-flex;align-items:center;gap:8px;color:#5d45df!important;font-weight:800}
+.faq-dashboard-link{display:inline-flex;align-items:center;gap:10px;margin-top:18px;padding:12px 16px;border:1px solid #e5e2fb;border-radius:12px;background:#fff;box-shadow:0 8px 26px #25204a0b;font-weight:800}
+.faq-dashboard-link:hover{border-color:#b9afff;transform:translateY(-1px)}
+.dashboard-window{overflow:hidden}
+.mock-sidebar .mock-nav{display:flex;align-items:center;gap:10px}
+.mock-sidebar .mock-nav>span{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;background:#f0edff;color:#7057f5}
+.mock-sidebar .mock-nav.active>span{background:#7057f5;color:#fff}
+@media(max-width:760px){.faq-dashboard-link{width:100%;justify-content:center}.nav-actions{padding-top:8px}}
