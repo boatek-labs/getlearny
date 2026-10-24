@@ -26,3 +26,16 @@
  .mock-sidebar-bottom{display:none}.mock-nav{font-size:6px}.floating-card{display:none}.tools-grid{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){.dashboard-window{animation:none;transform:none}}
+
+/* Font Awesome icon system for the public landing page */
+.marketing-page .fa-icon,.marketing-page .fa-solid,.marketing-page .fa-regular{display:inline-flex;align-items:center;justify-content:center;line-height:1;flex:0 0 auto}
+.marketing-page .site-nav .nav-signup .fa-icon{margin-left:7px}
+.marketing-page .play-icon{display:inline-flex;align-items:center;justify-content:center;font-size:21px}
+.marketing-page .proof-avatars span{display:grid;place-items:center}
+.marketing-page .mock-nav>span{display:inline-flex;align-items:center;justify-content:center}
+.marketing-page .subject-symbol,.marketing-page .float-icon,.marketing-page .chat-avatar,.marketing-page .journal-icon,.marketing-page .tool-icon{display:grid;place-items:center}
+.marketing-page .mock-spark,.marketing-page .practice-star{display:grid;place-items:center}
+.marketing-page .hero-bottom>span>i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;margin-right:6px}
+.marketing-page .tool-arrow{display:grid;place-items:center}
+.marketing-page .fa-solid{font-size:inherit}
+@media(max-width:720px){.marketing-page .hero-bottom>span{display:flex;align-items:center;gap:5px}.marketing-page .mock-nav>span{min-width:12px}}
