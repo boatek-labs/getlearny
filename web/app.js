@@ -62,7 +62,7 @@ function localRead(key){try{return JSON.parse(localStorage.getItem(key)||'[]')}c
 async function loadDashboard(){
   const connection=$('#connection');if(connection)connection.textContent=navigator.onLine?'Connecting to GetLearny…':'Device offline · local mode';
   if(state.token&&state.api){try{const me=await api('/me');state.user=me.user;localStorage.setItem('gl_user',JSON.stringify(state.user))}catch{}}
-  renderSubjects();renderSidebarAccount();renderDocumentSubjectOptions();
+  renderSubjects();renderSidebarAccount();renderDocumentSubjectOptions();fillProfile();
   state.journal=[];state.tests=[];state.logs=[];
   const localJournal=localRead('gl_journal'),localTests=localRead('gl_tests'),localLogs=localRead('gl_logs');
   try{
