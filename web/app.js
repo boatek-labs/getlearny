@@ -100,49 +100,12 @@ async function loadDashboard(){
   $('#auth-state').textContent=state.token?'Account connected':'Sign in to sync your progress';
   $('#greeting').textContent=`${state.user?.name?`Welcome back, ${state.user.name.split(' ')[0]}.`:'A little progress adds up.'}`;
 }
-function fillProfile(){const homeSignup=$('#home-signup');if(homeSignup)homeSignup.classList.toggle('hidden',!!state.token);const apiInput=$('#api-url');if(apiInput)apiInput.value=state.api;$('#sign-out').classList.toggle('hidden',!state.token);$('#auth-state').textContent=state.token?'Account connected':'Sign in to sync your progress';const avatar=state.user?.avatar_data;$('#avatar-preview').innerHTML=avatar?'<img src="'+avatar+'" alt="Profile picture">':esc((state.user?.name||'G').slice(0,1).toUpperCase());const settings=$('#profile-settings-form');if(settings){settings.classList.toggle('hidden',!state.token);if(settings.elements.class_level)settings.elements.class_level.value=state.user?.class_level||'';if(settings.elements.subjects)settings.elements.subjects.value=Array.isArray(state.user?.subjects)?state.user.subjects.join(', '):'';}$('#auth-form').classList.toggle('hidden',!!state.token);renderSidebarAccount();renderDocumentSubjectOptions();}
-function setRegister(value){state.register=value;state.registrationOtpPending=false;$('#register-mode').classList.toggle('selected',value);$('#login-mode').classList.toggle('selected',!value);$('#name-wrap').classList.toggle('hidden',!value);$('#level-wrap')?.classList.toggle('hidden',!value);$('#subjects-wrap')?.classList.toggle('hidden',!value);$('#otp-wrap')?.classList.add('hidden');$('#resend-otp')?.classList.add('hidden');$('#auth-form [name="verification_code"]')?.removeAttribute('required');$('#auth-submit').textContent=value?'Create account →':'Sign in →';$('#auth-message').textContent=''}
-$$('.nav-item').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));$$('[data-go]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.go)));$('#profile-open').onclick=$('#account-button').onclick=()=>showView('profile');$('#home-signup')?.addEventListener('click',()=>{showView('profile');setRegister(true);setupGoogleSignIn();$('#auth-form')?.scrollIntoView({behavior:'smooth',block:'center'})});$('#continue-learning').onclick=()=>{const first=getLearnerSubjects()[0];if(first)selectSubject(first);else showView('profile')};document.addEventListener('click',e=>{const card=e.target.closest('button.subject-card[data-subject]');if(card)selectSubject(card.dataset.subject)});document.addEventListener('keydown',e=>{const card=e.target.closest('button.subject-card[data-subject]');if(card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();selectSubject(card.dataset.subject)}});$('#login-mode').onclick=()=>{setRegister(false);setupGoogleSignIn()};$('#register-mode').onclick=()=>{setRegister(true);setupGoogleSignIn()};
+function fillProfile(){const apiInput=$('#api-url');if(apiInput)apiInput.value=state.api;const authState=$('#auth-state');if(authState)authState.textContent=state.token?'Account connected':'Sign in or create an account from the homepage to sync your progress';const signInLink=$('#profile-sign-in-link');if(signInLink)signInLink.classList.toggle('hidden',!!state.token);const avatar=$('#avatar-preview');if(avatar)avatar.innerHTML=state.user?.avatar_data?'<img src="'+state.user.avatar_data+'" alt="Profile picture">':esc((state.user?.name||'G').slice(0,1).toUpperCase());const settings=$('#profile-settings-form');if(settings){settings.classList.toggle('hidden',!state.token);if(settings.elements.class_level)settings.elements.class_level.value=state.user?.class_level||'';if(settings.elements.subjects)settings.elements.subjects.value=Array.isArray(state.user?.subjects)?state.user.subjects.join(', '):'';}renderSidebarAccount();renderDocumentSubjectOptions();}
 let googleClientId='';
-async function setupGoogleSignIn(){
- const message=$('#google-auth-message'),button=$('#google-signin-button');
- try{
-  const config=await api('/auth/config',{method:'GET'});
-  googleClientId=String(config.googleClientId||'');
-  if(!googleClientId){if(message)message.textContent='Google sign-in is not configured yet.';return;}
-  const render=()=>{if(!window.google?.accounts?.id||!button)return;button.innerHTML='';window.google.accounts.id.initialize({client_id:googleClientId,callback:handleGoogleCredential,auto_select:false,context:'signin'});window.google.accounts.id.renderButton(button,{type:'standard',theme:document.documentElement.dataset.theme==='dark'?'filled_black':'outline',size:'large',shape:'pill',text:state.register?'signup_with':'signin_with',width:280});};
-  let attempts=0;const timer=setInterval(()=>{attempts++;if(window.google?.accounts?.id){clearInterval(timer);render()}else if(attempts>=40){clearInterval(timer);if(message)message.textContent='Google sign-in could not load. Check your connection and retry.'}},250);
- }catch(error){if(message)message.textContent='Google sign-in setup could not be loaded: '+error.message}
-}
-async function handleGoogleCredential(response){
- const message=$('#google-auth-message');if(message)message.textContent='Verifying your Google account…';
- try{const result=await api('/auth/google',{method:'POST',body:JSON.stringify({credential:response.credential})});state.token=result.token;state.user=result.user;localStorage.setItem('gl_token',result.token);localStorage.setItem('gl_user',JSON.stringify(result.user));if(message)message.textContent='';toast('Google account connected.');fillProfile();await loadDashboard();showView('home');}
- catch(error){if(message)message.textContent=error.message}
-}
-$('#save-api').onclick=()=>{state.api=($('#api-url')?.value||'').trim().replace(/\/$/,'');localStorage.setItem('gl_api',state.api);toast('API connection setting saved.');loadDashboard()};
-$('#auth-form').addEventListener('submit',async e=>{
- e.preventDefault();const f=new FormData(e.currentTarget),message=$('#auth-message');message.textContent='';
- const email=String(f.get('email')||'').trim().toLowerCase();
- try{
-  if(state.register&&!state.registrationOtpPending){
-   message.textContent='Sending verification code…';
-   const result=await api('/auth/register/request-otp',{method:'POST',body:JSON.stringify({name:f.get('name'),class_level:f.get('class_level'),subjects:String(f.get('subjects')||'').split(',').map(s=>s.trim()).filter(Boolean),email,password:f.get('password')})});
-   state.registrationOtpPending=true;$('#otp-wrap').classList.remove('hidden');$('#resend-otp')?.classList.remove('hidden');$('#auth-submit').textContent='Verify email & create account →';$('#auth-form [name="verification_code"]').required=true;$('#auth-form [name="verification_code"]').focus();message.textContent=result.message||'Code sent. Check your email and spam folder.';return;
-  }
-  const endpoint=state.register?'/auth/register/verify-otp':'/auth/login';
-  const payload=state.register?{email,code:String(f.get('verification_code')||'').trim()}:{email,password:f.get('password')};
-  if(state.register&&payload.code.length!==6){message.textContent='Enter the 6-digit code sent to your email.';return}
-  if(state.register)message.textContent='Verifying your email…';
-  const r=await api(endpoint,{method:'POST',body:JSON.stringify(payload)});
-  state.registrationOtpPending=false;state.token=r.token;state.user=r.user;localStorage.setItem('gl_token',r.token);localStorage.setItem('gl_user',JSON.stringify(r.user));toast('You are signed in.');await loadDashboard();fillProfile()
- }catch(err){message.textContent=err.message}
-});
-$('#resend-otp')?.addEventListener('click',async()=>{const f=new FormData($('#auth-form'));const message=$('#auth-message');message.textContent='Sending a new code…';try{const result=await api('/auth/register/request-otp',{method:'POST',body:JSON.stringify({name:f.get('name'),class_level:f.get('class_level'),subjects:String(f.get('subjects')||'').split(',').map(s=>s.trim()).filter(Boolean),email:String(f.get('email')||'').trim().toLowerCase(),password:f.get('password')})});message.textContent=result.message||'A new code was sent.'}catch(error){message.textContent=error.message}});
 $('#profile-settings-form')?.addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const class_level=String(f.get('class_level')||'').trim();const subjects=String(f.get('subjects')||'').split(',').map(s=>s.trim()).filter(Boolean);if(subjects.length>40){$('#profile-settings-message').textContent='Please enter no more than 40 subjects.';return;}$('#profile-settings-message').textContent='Saving…';try{const r=await api('/me',{method:'PATCH',body:JSON.stringify({class_level,subjects})});state.user=r.user;localStorage.setItem('gl_user',JSON.stringify(state.user));fillProfile();renderDocumentSubjectOptions();$('#profile-settings-message').textContent='Learning profile saved.';toast('Learning profile updated.');}catch(err){$('#profile-settings-message').textContent=err.message;}});
-function signOut(){state.token='';state.user=null;localStorage.removeItem('gl_token');localStorage.removeItem('gl_user');state.quizQuestions=[];fillProfile();renderSidebarAccount();loadDashboard();toast('Signed out. Sign in again to sync your progress.')}
-setupGoogleSignIn();
-$('#sign-out').onclick=signOut;
-$('#sidebar-sign-out').onclick=e=>{e.stopPropagation();signOut()};
+function signOut(){state.token='';state.user=null;localStorage.removeItem('gl_token');localStorage.removeItem('gl_user');state.quizQuestions=[];fillProfile();renderSidebarAccount();loadDashboard();toast('Signed out. Sign in again to sync your progress.');}
+if($('#sign-out'))$('#sign-out').onclick=signOut;
+if($('#sidebar-sign-out'))$('#sidebar-sign-out').onclick=e=>{e.stopPropagation();signOut()};
 $('#journal-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const entry={learned:f.get('learned').trim(),difficult:f.get('difficult').trim(),next_step:f.get('next_step').trim(),date:new Date().toISOString()};try{if(state.token&&state.api){const r=await api('/journal',{method:'POST',body:JSON.stringify(entry)});state.journal.unshift(r.entry)}else{toast('Sign in to save reflections to your account.');showView('profile');return}e.currentTarget.reset();renderRecords();loadDashboard();toast('Reflection saved.')}catch(err){toast(err.message)}});
 $('#test-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const test={subject:f.get('subject').trim(),title:f.get('title').trim(),score:Number(f.get('score')),max_score:Number(f.get('max_score')),date:new Date().toISOString()};if(test.score>test.max_score){toast('Your score cannot exceed the maximum.');return}try{if(state.token&&state.api){const r=await api('/tests',{method:'POST',body:JSON.stringify(test)});state.tests.unshift(r.test)}else{toast('Sign in to sync test results.');showView('profile');return}e.currentTarget.reset();e.currentTarget.querySelector('[name=max_score]').value=20;renderRecords();loadDashboard();toast('Test result recorded.')}catch(err){toast(err.message)}});
 function setTheme(mode){document.documentElement.dataset.theme=mode;localStorage.setItem('gl_theme',mode);const b=$('#theme-toggle');if(b){b.textContent=mode==='dark'?'☀':'☾';b.title=mode==='dark'?'Switch to light mode':'Switch to dark mode';}const m=$('meta[name="theme-color"]');if(m)m.content=mode==='dark'?'#0F1020':'#11152B';}
@@ -289,11 +252,3 @@ window.addEventListener('offline',()=>{$('#connection').textContent='Device offl
 window.addEventListener('online',()=>{$('#connection').textContent='Reconnecting…';$('.status-dot').style.background='#f0b84d';loadDashboard();});
 setupNotifications();const now=new Date();$('#today').textContent=now.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}).toUpperCase();if(state.api&&$('#api-url'))$('#api-url').value=state.api;loadDashboard();
 
-// Open the requested account mode when arriving from the public marketing homepage.
-const requestedAuthMode = new URLSearchParams(window.location.search).get('auth');
-if (!state.token && (requestedAuthMode === 'login' || requestedAuthMode === 'signup')) {
-  showView('profile');
-  setRegister(requestedAuthMode === 'signup');
-  setupGoogleSignIn();
-  window.setTimeout(() => $('#auth-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
-}
