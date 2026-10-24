@@ -903,3 +903,10 @@ html[data-theme="dark"] #view-profile .auth-card #otp-wrap{background:#1d1b30;bo
 
 /* Sidebar drag-width alignment: keep navigation and workspace in the same coordinate system. */
 @media(min-width:901px){body{--gl-sidebar-width:264px}.sidebar{width:var(--gl-sidebar-width,264px)}.main{margin-left:var(--gl-sidebar-width,264px);width:calc(100% - var(--gl-sidebar-width,264px))}body.sidebar-collapsed .sidebar{width:78px}body.sidebar-collapsed .main{margin-left:78px;width:calc(100% - 78px)}}
+
+/* Actual draggable sidebar handle: a slim grab tab, not a hamburger menu. */
+#sidebar-collapse-toggle{width:18px!important;height:54px!important;right:-9px!important;top:50%!important;transform:translateY(-50%);border-radius:0 9px 9px 0!important;touch-action:none;cursor:ew-resize!important;padding:0!important;gap:0!important;background:#fff!important;border:1px solid #e2e4ef!important;box-shadow:3px 2px 10px rgba(35,39,75,.12)!important}
+#sidebar-collapse-toggle .sidebar-handle-grip{width:4px;height:26px;border-radius:8px;background:#b5b8cc;display:block}
+#sidebar-collapse-toggle:hover .sidebar-handle-grip{background:#7057f5}
+#sidebar-collapse-toggle:active{background:#f3f1ff!important}
+@media(max-width:900px){#sidebar-collapse-toggle{display:none!important}}
