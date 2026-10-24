@@ -21,5 +21,5 @@ $$('[data-auth-primary]').forEach(a=>a.addEventListener('click',e=>{e.preventDef
 $$('[data-auth-close]').forEach(x=>x.addEventListener('click',close));
 document.addEventListener('keydown',e=>{if(overlay.hidden)return;if(e.key==='Escape'){close();return}if(e.key==='Tab'){const els=$$('button:not(:disabled):not([hidden]),a[href],input:not(:disabled):not([hidden])',dialog).filter(x=>x.offsetParent!==null);if(!els.length)return;const first=els[0],last=els[els.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
 if(hasToken())$$('[data-auth-login]').forEach(a=>{a.href='/app.html';a.textContent='Dashboard';a.classList.add('nav-dashboard')});
-const requested=new URLSearchParams(location.search).get('auth');if(requested==='login'||requested==='signup')open(requested);
+const requested=new URLSearchParams(location.search).get('auth');if((requested==='login'||requested==='signup')&&hasToken())location.replace('/app.html');else if(requested==='login'||requested==='signup')open(requested);
 })();
