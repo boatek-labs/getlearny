@@ -859,3 +859,24 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 #view-profile .auth-card #resend-otp{justify-self:start;margin-top:-9px}
 html[data-theme="dark"] #view-profile .auth-card #otp-wrap{background:#1d1b30;border-color:#49416d}
 @media(max-width:600px){#view-profile #google-signin-button{min-height:42px}#view-profile .auth-card #otp-wrap input{font-size:18px}}
+
+/* Mobile app shell and Google Identity control sizing corrections. */
+@media(max-width:900px){
+ .main{width:100%;min-width:0;margin-left:0;padding:0 16px}
+ .sidebar{width:min(300px,86vw);max-width:86vw;transform:translateX(-105%);visibility:hidden;transition:transform .22s ease,visibility .22s}
+ body.mobile-nav-open .sidebar{transform:translateX(0);visibility:visible}.mobile-nav-backdrop{display:block}
+ .view,.view.active{min-width:0;max-width:100%;overflow-x:clip}.topbar{min-width:0;gap:8px}.top-actions{gap:5px}
+ .top-actions>span:not(.status-dot){max-width:95px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.icon-button{margin-left:2px;flex:0 0 auto}
+}
+@media(max-width:600px){
+ .main{padding-left:12px;padding-right:12px}.topbar{height:auto;min-height:66px;margin-bottom:22px}
+ .breadcrumb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.top-actions .icon-button{width:34px;height:34px}
+ .hero,.form-card,.practice-builder,.practice-card,.lesson-panel,.auth-card{max-width:100%;min-width:0}
+ .auth-card{width:100%;margin-inline:auto;padding:clamp(16px,4vw,24px)!important}
+ .auth-card input,.auth-card button,.auth-card select{max-width:100%}
+ .google-signin-wrap{width:100%;min-width:0;display:flex;justify-content:center;align-items:center;overflow:hidden}
+ #view-profile #google-signin-button{width:100%;min-width:0;max-width:100%;min-height:42px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important}
+ #view-profile #google-signin-button iframe{display:block;width:100%!important;max-width:100%!important;margin:0 auto!important}
+ #view-profile .google-signin-wrap>div{max-width:100%;margin-inline:auto}
+}
+@media(max-width:380px){.top-actions .status-dot{display:none}.top-actions>span:not(.status-dot){max-width:68px}.top-actions .icon-button{width:31px;height:31px}}
