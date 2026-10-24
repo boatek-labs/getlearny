@@ -880,3 +880,22 @@ html[data-theme="dark"] #view-profile .auth-card #otp-wrap{background:#1d1b30;bo
  #view-profile .google-signin-wrap>div{max-width:100%;margin-inline:auto}
 }
 @media(max-width:380px){.top-actions .status-dot{display:none}.top-actions>span:not(.status-dot){max-width:68px}.top-actions .icon-button{width:31px;height:31px}}
+
+/* Dashboard visual refinement: stronger hierarchy, icon consistency, and calmer cards */
+.nav-item{min-height:46px;gap:12px;border:1px solid transparent;transition:background .18s ease,border-color .18s ease,transform .18s ease}
+.nav-item:hover{transform:translateX(2px)}
+.nav-item span{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:10px;font-size:14px;background:#f5f4fc;color:#7772a0}
+.nav-item.active span{background:#7057F5;color:#fff;box-shadow:0 5px 12px #7057f52b}
+.nav-item.active{border-color:#e8e4ff;box-shadow:0 5px 18px #211a5008}
+.view>.eyebrow{margin-bottom:10px;letter-spacing:1.8px;font-weight:800}
+.view>h1{font-family:Manrope,sans-serif;letter-spacing:-1.5px;line-height:1.12}
+.view>.lead{max-width:760px;line-height:1.75;color:#74758f}
+.view-home>.hero,.hero{position:relative;overflow:hidden;border:1px solid #e6e4fb;border-radius:24px;background:radial-gradient(circle at 88% 16%,#dcd5ff 0,transparent 32%),linear-gradient(125deg,#f4f1ff 0%,#fff 55%,#eafaff 100%);box-shadow:0 18px 46px #25204a0c}
+.hero-copy{position:relative;z-index:1}
+.hero-tag{display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid #e4defe;border-radius:999px;background:#ffffffb8;color:#6652d8;font-size:10px;font-weight:800;letter-spacing:1.1px}
+.hero h2{font-family:Manrope,sans-serif;letter-spacing:-1.6px;line-height:1.08}
+.stat-card{border:1px solid #e8e8f2;border-radius:18px;box-shadow:0 8px 26px #17183108;transition:transform .18s ease,box-shadow .18s ease}
+.stat-card:hover{transform:translateY(-3px);box-shadow:0 14px 32px #17183110}
+.stat-icon{display:grid;place-items:center;border-radius:12px;width:38px;height:38px;font-size:15px}
+@media(max-width:720px){.view>h1{font-size:clamp(28px,7vw,38px)}.hero{border-radius:18px}.stat-card{border-radius:15px}}
+@media(prefers-reduced-motion:reduce){.nav-item,.stat-card{transition:none}.nav-item:hover,.stat-card:hover{transform:none}}
