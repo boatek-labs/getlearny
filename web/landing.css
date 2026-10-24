@@ -76,3 +76,40 @@
 .mock-sidebar .mock-nav>span{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;background:#f0edff;color:#7057f5}
 .mock-sidebar .mock-nav.active>span{background:#7057f5;color:#fff}
 @media(max-width:760px){.faq-dashboard-link{width:100%;justify-content:center}.nav-actions{padding-top:8px}}
+
+/* Landing-page authentication dialog */
+body.auth-open{overflow:hidden}
+.auth-overlay[hidden],.auth-field[hidden],.auth-resend[hidden]{display:none!important}
+.auth-overlay{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;overflow:auto}
+.auth-backdrop{position:fixed;inset:0;background:rgba(14,16,38,.68);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+.auth-dialog{position:relative;z-index:1;width:min(100%,480px);max-height:min(92dvh,900px);overflow:auto;padding:clamp(22px,5vw,38px);border:1px solid rgba(255,255,255,.8);border-radius:26px;background:#fff;color:#19182d;box-shadow:0 32px 100px rgba(10,12,35,.32);outline:none;animation:auth-pop .2s ease-out}
+@keyframes auth-pop{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+.auth-close{position:absolute;top:15px;right:15px;display:grid;place-items:center;width:38px;height:38px;border:1px solid #e9e7f3;border-radius:12px;background:#fff;color:#5d5b75;font-size:25px;line-height:1}
+.auth-brand{display:inline-flex;align-items:center;gap:10px;color:#19182d;text-decoration:none;font:800 17px Manrope,sans-serif}
+.auth-brand img{border-radius:12px}
+.auth-brand small{display:block;margin-top:3px;color:#8886a1;font:800 8px "DM Sans",sans-serif;letter-spacing:1.5px}
+.auth-dialog-heading{margin:25px 0 20px}
+.auth-kicker{display:inline-flex;align-items:center;gap:8px;color:#6d56e9;font-size:10px;font-weight:800;letter-spacing:1.3px}
+.auth-dialog-heading h2{margin:12px 0 7px;font:800 clamp(27px,6vw,34px)/1.15 Manrope,sans-serif;letter-spacing:-1.2px}
+.auth-dialog-heading p{margin:0;color:#77758f;font-size:13px;line-height:1.65}
+.landing-auth-form{display:grid;gap:14px}
+.landing-auth-form .auth-toggle{display:flex;gap:4px;padding:4px;background:#f3f2fa;border-radius:13px}
+.landing-auth-form .auth-toggle button{flex:1;padding:11px;border:0;border-radius:10px;background:transparent;color:#797790;font-weight:800}
+.landing-auth-form .auth-toggle button.selected{background:#fff;color:#27233f;box-shadow:0 3px 12px rgba(35,27,85,.08)}
+.auth-field{display:grid;gap:7px;color:#45435f;font-size:11px;font-weight:800}
+.auth-field input{width:100%;min-width:0;min-height:46px;padding:12px 13px;border:1px solid #e3e1ee;border-radius:12px;background:#fcfcff;color:#211f38;font:500 14px "DM Sans",sans-serif;outline:none;transition:border-color .15s,box-shadow .15s}
+.auth-field input:focus{border-color:#8a78ff;box-shadow:0 0 0 4px rgba(112,87,245,.12)}
+.auth-field small{color:#85829c;font-size:10px;font-weight:500;line-height:1.5}
+.auth-optional{margin-left:5px;color:#9693aa;font-weight:500}
+.auth-submit{width:100%;min-height:49px;margin-top:2px;justify-content:center;border-radius:12px;box-shadow:0 9px 22px rgba(112,87,245,.2)}
+.auth-submit:disabled,.auth-resend:disabled{opacity:.65;cursor:wait;transform:none}
+.landing-auth-form .auth-divider{display:flex;align-items:center;gap:12px;color:#9693aa;font-size:11px;font-weight:700}
+.landing-auth-form .auth-divider:before,.landing-auth-form .auth-divider:after{content:"";height:1px;flex:1;background:#e9e7f2}
+.landing-google-button{display:flex;justify-content:center;min-height:42px;max-width:100%;overflow:hidden}
+.landing-google-button iframe{max-width:100%!important}
+.auth-status{min-height:0;margin:0;color:#bd4d45;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.auth-status:empty{display:none}
+.auth-resend{justify-self:start;padding:0;border:0;background:transparent;color:#6d56e9;font-size:11px;font-weight:800}
+.auth-legal{margin:0;color:#9693aa;text-align:center;font-size:10px;line-height:1.55}
+@media(max-width:520px){.auth-overlay{align-items:end;padding:0}.auth-dialog{width:100%;max-height:94dvh;padding:26px 22px calc(22px + env(safe-area-inset-bottom));border-radius:24px 24px 0 0;border-bottom:0}.auth-close{top:13px;right:13px}.auth-dialog-heading{margin-top:20px}}
+@media(prefers-reduced-motion:reduce){.auth-dialog{animation:none}.auth-field input{transition:none}}

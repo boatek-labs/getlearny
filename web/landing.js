@@ -27,13 +27,10 @@
   try { signedIn=Boolean(localStorage.getItem('gl_token')); } catch(e) {}
   if(signedIn){
     $$('[data-auth-login]').forEach(a=>{a.href='/app.html';a.textContent='Dashboard';a.classList.add('nav-dashboard');});
-    $$('a[href*="auth=signup"]').forEach(a=>{
+    $$('[data-auth-primary]').forEach(a=>{
       a.href='/app.html';
-      const span=$('span',a);
       const label=a.classList.contains('nav-signup')?'Open dashboard':'Go to dashboard';
-      a.textContent=label+' ';
-      if(span){a.appendChild(span);span.textContent='→';}
-      else a.insertAdjacentHTML('beforeend','<span>→</span>');
+      a.textContent=label+' →';
     });
     const proof=$('.hero-proof p');
     if(proof){proof.innerHTML='<b>Welcome back to your learning space.</b><small>Your next step is waiting in the dashboard.</small>';}
