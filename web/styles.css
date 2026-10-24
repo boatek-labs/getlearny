@@ -899,3 +899,7 @@ html[data-theme="dark"] #view-profile .auth-card #otp-wrap{background:#1d1b30;bo
 .stat-icon{display:grid;place-items:center;border-radius:12px;width:38px;height:38px;font-size:15px}
 @media(max-width:720px){.view>h1{font-size:clamp(28px,7vw,38px)}.hero{border-radius:18px}.stat-card{border-radius:15px}}
 @media(prefers-reduced-motion:reduce){.nav-item,.stat-card{transition:none}.nav-item:hover,.stat-card:hover{transform:none}}
+
+
+/* Sidebar drag-width alignment: keep navigation and workspace in the same coordinate system. */
+@media(min-width:901px){body{--gl-sidebar-width:264px}.sidebar{width:var(--gl-sidebar-width,264px)}.main{margin-left:var(--gl-sidebar-width,264px);width:calc(100% - var(--gl-sidebar-width,264px))}body.sidebar-collapsed .sidebar{width:78px}body.sidebar-collapsed .main{margin-left:78px;width:calc(100% - 78px)}}
