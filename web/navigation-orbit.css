@@ -1,6 +1,6 @@
 /* GetLearny Navigation Orbit — mobile-first navigation system */
 .navigation-orbit{display:none}
-@media(max-width:760px){
+@media(max-width:900px){
   body{--orbit-ink:#11152b;--orbit-violet:#7057f5;--orbit-cyan:#9be7ff}
   .sidebar{display:none!important}
   .main{margin-left:0!important;padding:0 16px 104px!important;width:100%;max-width:none}
