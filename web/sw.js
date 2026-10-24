@@ -1,11 +1,11 @@
-const CACHE_NAME='getlearny-shell-v12';
+const CACHE_NAME='getlearny-shell-v13';
 const SHELL_ASSETS=[
  '/',
  '/index.html',
- '/styles.css?v=20261024-session-nav2',
+ '/styles.css?v=20261024-connection-refresh3',
  '/focus.css?v=20261019-3',
  '/revision.css?v=20261019-4',
- '/app.js?v=20261024-session-nav2',
+ '/app.js?v=20261024-connection-refresh3',
  '/focus.js?v=20261019-3',
  '/revision.js?v=20261019-4',
  '/manifest.json',
@@ -42,13 +42,24 @@ self.addEventListener('fetch',event=>{
  }
 
  if(['style','script','image','font'].includes(request.destination)){
-  event.respondWith(caches.match(request).then(cached=>{
-   const refresh=fetch(request).then(response=>{
+  event.respondWith((async()=>{
+   const cached=await caches.match(request);
+   // Always prefer fresh JavaScript/CSS so connection and auth fixes are not
+   // delayed behind an old cached shell. Fall back to cache only when offline.
+   if(request.destination==='script'||request.destination==='style'){
+    try{
+     const response=await fetch(request,{cache:'no-store'});
+     if(response.ok){const copy=response.clone();caches.open(CACHE_NAME).then(cache=>cache.put(request,copy));}
+     return response;
+    }catch{return cached||new Response('',{status:503});}
+   }
+   if(cached)return cached;
+   try{
+    const response=await fetch(request);
     if(response.ok){const copy=response.clone();caches.open(CACHE_NAME).then(cache=>cache.put(request,copy));}
     return response;
-   }).catch(()=>cached);
-   return cached||refresh;
-  }));
+   }catch{return new Response('',{status:503});}
+  })());
  }
 });
 
