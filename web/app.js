@@ -60,45 +60,66 @@ function renderRecords(){const journal=$('#journal-list');journal.innerHTML=stat
 $('#test-list').innerHTML=state.tests.length?state.tests.map(t=>`<article class="record"><div class="record-top"><span>${esc(new Date(t.taken_at||t.date||Date.now()).toLocaleDateString())}</span><span>${Number(t.score/t.max_score*100).toFixed(0)}%</span></div><b>${esc(t.title)} · ${esc(t.subject)}</b><p>Score: ${esc(t.score)} / ${esc(t.max_score)}</p></article>`).join(''):'<div class="record"><p>No tests recorded yet. Add your next class test or practice result above.</p></div>'}
 function localRead(key){try{return JSON.parse(localStorage.getItem(key)||'[]')}catch{return []}}function localWrite(key,v){localStorage.setItem(key,JSON.stringify(v))}
 async function loadDashboard(){
-  const connection=$('#connection');if(connection)connection.textContent=navigator.onLine?'Connecting to GetLearny…':'Device offline · local mode';
-  if(state.token&&state.api){try{const me=await api('/me');state.user=me.user;localStorage.setItem('gl_user',JSON.stringify(state.user))}catch{}}
+  const connection=$('#connection'),dot=$('.status-dot');
+  const setConnection=(message,color)=>{if(connection)connection.textContent=message;if(dot)dot.style.background=color};
+  setConnection(navigator.onLine?'Checking API…':'Device offline · local mode','#f0b84d');
   renderSubjects();renderSidebarAccount();renderDocumentSubjectOptions();fillProfile();
   state.journal=[];state.tests=[];state.logs=[];
   const localJournal=localRead('gl_journal'),localTests=localRead('gl_tests'),localLogs=localRead('gl_logs');
+  let healthy=false;
   try{
-    const health=await api('/health',{timeoutMs:12000});
-    const healthy=health.status==='ok'&&health.database?.connected;
-    $('#connection').textContent=healthy?(state.token?'Checking sync…':'Online · sign in to sync'):(health.database?.configured?'Database needs attention':'API online · database not configured');
-    $('.status-dot').style.background=healthy?'#26ad72':'#f0b84d';
-  }catch{
-    $('#connection').textContent='Server unreachable';
-    $('.status-dot').style.background='#d65c55';
+    const health=await api('/health',{timeoutMs:10000});
+    healthy=health.status==='ok'&&health.database?.connected===true;
+    setConnection(healthy?(state.token?'Checking your session…':'Online · sign in to sync'):(health.database?.configured?'Database needs attention':'API online · database not configured'),healthy?'#26ad72':'#f0b84d');
+  }catch(error){
+    setConnection(error.message.includes('timed out')?'API check timed out':'API unreachable','#d65c55');
   }
   if(state.token&&state.api){
     try{
-      const [d,j,t,l]=await Promise.all([api('/dashboard'),api('/journal'),api('/tests'),api('/learning-logs')]);
+      const me=await api('/me',{timeoutMs:12000});
+      if(!me?.user)throw new Error('Session validation failed');
+      state.user=me.user;localStorage.setItem('gl_user',JSON.stringify(state.user));
+    }catch(error){
+      if(/401|403|sign in required|session expired|invalid token|jwt expired/i.test(error.message)){
+        state.token='';state.user=null;localStorage.removeItem('gl_token');localStorage.removeItem('gl_user');
+        setConnection('Session expired · sign in again','#f0b84d');
+      }else{
+        console.warn('Could not refresh learner session:',error);
+        if(!healthy)setConnection('API unavailable · retry when connected','#d65c55');
+      }
+    }
+    renderSubjects();renderSidebarAccount();renderDocumentSubjectOptions();fillProfile();
+  }
+  if(state.token&&state.api){
+    try{
+      const [d,j,t,l]=await Promise.all([
+        api('/dashboard',{timeoutMs:15000}),api('/journal',{timeoutMs:15000}),
+        api('/tests',{timeoutMs:15000}),api('/learning-logs',{timeoutMs:15000})
+      ]);
       $('#stat-topics').textContent=d.progress?.completedTopics??0;
       $('#stat-time').textContent=`${d.progress?.minutesStudied??0} min`;
       $('#stat-tests').textContent=d.tests?.tests??t.tests.length;
       $('#stat-journal').textContent=d.journal?.journal_entries??j.entries.length;
-      state.journal=j.entries;state.tests=t.tests;state.logs=l.logs;
-      $('#connection').textContent='Online · progress synced';
-      $('.status-dot').style.background='#26ad72';
-    }catch(e){
+      state.journal=j.entries||[];state.tests=t.tests||[];state.logs=l.logs||[];
+      setConnection('Online · progress synced','#26ad72');
+    }catch(error){
       $('#stat-topics').textContent='—';$('#stat-time').textContent='—';$('#stat-tests').textContent='—';$('#stat-journal').textContent='—';
-      $('#connection').textContent=e.message.includes('Session expired')?'Sign in again':'Sync needs attention';
-      $('.status-dot').style.background='#f0b84d';
+      if(/401|403|sign in required|session expired|invalid token|jwt expired/i.test(error.message)){
+        state.token='';state.user=null;localStorage.removeItem('gl_token');localStorage.removeItem('gl_user');fillProfile();renderSidebarAccount();
+        setConnection('Session expired · sign in again','#f0b84d');
+      }else setConnection(healthy?'Connected · progress sync failed':'API unavailable · progress not synced','#f0b84d');
     }
   }else{
     $('#stat-topics').textContent=localLogs.filter(l=>l.status==='completed').length;
     $('#stat-time').textContent=`${localLogs.reduce((a,l)=>a+(l.minutes_spent||0),0)} min`;
     $('#stat-tests').textContent=localTests.length;$('#stat-journal').textContent=localJournal.length;
+    if(!state.token&&healthy)setConnection('Online · sign in to sync','#26ad72');
   }
   renderRecords();
   if(typeof renderRevisionInsights==='function')renderRevisionInsights();
-  $('#user-name').textContent=state.user?.name||'Student';
+  if($('#user-name'))$('#user-name').textContent=state.user?.name||'Student';
   const authState=$('#auth-state');if(authState)authState.textContent=state.token?'Account connected':'Sign in or create an account from the homepage to sync your progress';
-  $('#greeting').textContent=`${state.user?.name?`Welcome back, ${state.user.name.split(' ')[0]}.`:'A little progress adds up.'}`;
+  if($('#greeting'))$('#greeting').textContent=`${state.user?.name?`Welcome back, ${state.user.name.split(' ')[0]}.`:'A little progress adds up.'}`;
 }
 function fillProfile(){const apiInput=$('#api-url');if(apiInput)apiInput.value=state.api;const profileAuthState=$('#profile-auth-state');if(profileAuthState)profileAuthState.textContent=state.token?'Account connected':'Sign in or create an account from the homepage to sync your progress';const signInLink=$('#profile-sign-in-link');if(signInLink)signInLink.classList.toggle('hidden',!!state.token);const avatar=$('#avatar-preview');if(avatar)avatar.innerHTML=state.user?.avatar_data?'<img src="'+state.user.avatar_data+'" alt="Profile picture">':esc((state.user?.name||'G').slice(0,1).toUpperCase());const settings=$('#profile-settings-form');if(settings){settings.classList.toggle('hidden',!state.token);if(settings.elements.class_level)settings.elements.class_level.value=state.user?.class_level||'';if(settings.elements.subjects)settings.elements.subjects.value=Array.isArray(state.user?.subjects)?state.user.subjects.join(', '):'';}renderSidebarAccount();renderDocumentSubjectOptions();}
 $('#profile-settings-form')?.addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const class_level=String(f.get('class_level')||'').trim();const subjects=String(f.get('subjects')||'').split(',').map(s=>s.trim()).filter(Boolean);if(subjects.length>40){$('#profile-settings-message').textContent='Please enter no more than 40 subjects.';return;}$('#profile-settings-message').textContent='Saving…';try{const r=await api('/me',{method:'PATCH',body:JSON.stringify({class_level,subjects})});state.user=r.user;localStorage.setItem('gl_user',JSON.stringify(state.user));fillProfile();renderDocumentSubjectOptions();$('#profile-settings-message').textContent='Learning profile saved.';toast('Learning profile updated.');}catch(err){$('#profile-settings-message').textContent=err.message;}});
