@@ -79,7 +79,7 @@
 
 /* Landing-page authentication dialog */
 body.auth-open{overflow:hidden}
-.auth-overlay[hidden]{display:none!important}
+.auth-overlay[hidden],.auth-field[hidden],.auth-resend[hidden]{display:none!important}
 .auth-overlay{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;overflow:auto}
 .auth-backdrop{position:fixed;inset:0;background:rgba(14,16,38,.68);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
 .auth-dialog{position:relative;z-index:1;width:min(100%,480px);max-height:min(92dvh,900px);overflow:auto;padding:clamp(22px,5vw,38px);border:1px solid rgba(255,255,255,.8);border-radius:26px;background:#fff;color:#19182d;box-shadow:0 32px 100px rgba(10,12,35,.32);outline:none;animation:auth-pop .2s ease-out}
