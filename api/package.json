@@ -31,5 +31,7 @@
     "pdf-parse": "^1.1.1",
     "tesseract.js": "^6.0.1"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
 }
