@@ -10,7 +10,7 @@
     "api"
   ],
   "scripts": {
-    "build": "npm --workspace getlearny-api run build && npm --workspace getlearny-api test",
+    "build": "npm --workspace getlearny-api run build && npm --workspace getlearny-api test && if [ \"$VERCEL_ENV\" = \"production\" ]; then npm run db:migrate; fi",
     "db:migrate": "npm --workspace getlearny-api run db:migrate",
     "check": "npm --workspace getlearny-api run check && npm --workspace getlearny-api test"
   }
