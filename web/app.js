@@ -88,11 +88,30 @@ function renderQuiz(){
 function renderRecords(){const journal=$('#journal-list');journal.innerHTML=state.journal.length?state.journal.map(e=>`<article class="record"><div class="record-top"><span>${esc(new Date(e.created_at||e.date||Date.now()).toLocaleDateString())}</span><span>REFLECTION</span></div><b>${esc(e.learned)}</b>${e.difficult?`<p>Challenge: ${esc(e.difficult)}</p>`:''}${e.next_step?`<p>Next step: ${esc(e.next_step)}</p>`:''}</article>`).join(''):'<div class="record"><p>No reflections yet. Your first note can be just one sentence.</p></div>';
 $('#test-list').innerHTML=state.tests.length?state.tests.map(t=>`<article class="record"><div class="record-top"><span>${esc(new Date(t.taken_at||t.date||Date.now()).toLocaleDateString())}</span><span>${Number(t.score/t.max_score*100).toFixed(0)}%</span></div><b>${esc(t.title)} · ${esc(t.subject)}</b><p>Score: ${esc(t.score)} / ${esc(t.max_score)}</p></article>`).join(''):'<div class="record"><p>No tests recorded yet. Add your next class test or practice result above.</p></div>'}
 function localRead(key){try{return JSON.parse(localStorage.getItem(key)||'[]')}catch{return []}}function localWrite(key,v){localStorage.setItem(key,JSON.stringify(v))}
+async function loadCommunitySummary(){
+ const note=$('#community-note');
+ if(!state.token){if(note)note.textContent='Sign in to track your study streak and invite a study buddy.';return}
+ try{
+  const data=await api('/community/summary',{timeoutMs:10000});
+  const streak=data.streak||{};
+  const current=$('#study-streak-current'),longest=$('#study-streak-longest'),active=$('#study-active-days');
+  if(current)current.innerHTML=esc(streak.current??0)+' <small>days</small>';
+  if(longest)longest.innerHTML=esc(streak.longest??0)+' <small>days</small>';
+  if(active)active.textContent=String(streak.activeDays??0);
+  const url=new URL(data.invite?.url||location.origin,location.origin);url.searchParams.set('ref',data.invite?.code||'');
+  const buddy=$('#invite-study-buddy'),share=$('#share-getlearny'),copy=$('#copy-referral-link');
+  const shareLink=async(title,textValue)=>{const payload={title,text:textValue,url:url.toString()};if(navigator.share){try{await navigator.share(payload);if(note)note.textContent='Invitation shared.';return}catch(error){if(error?.name==='AbortError')return}}try{await navigator.clipboard.writeText(url.toString());if(note)note.textContent='Invite link copied. Send it to your study buddy.'}catch{if(note)note.textContent='Copy this invite link: '+url.toString()}};
+  if(buddy)buddy.onclick=()=>shareLink('Study with me on GetLearny','Join me on GetLearny and let’s build a consistent study habit.');
+  if(share)share.onclick=()=>shareLink('GetLearny','Learn with purpose. Join GetLearny.');
+  if(copy)copy.onclick=async()=>{try{await navigator.clipboard.writeText(url.toString());if(note)note.textContent='Your invite link has been copied.'}catch{if(note)note.textContent='Copy this link: '+url.toString()}};
+  if(note){const refs=data.referral||{};note.textContent=(streak.current?'You’re building consistency — keep learning each day.':'Complete a lesson or practice to start building your streak.')+' Invites: '+(refs.invited||0)+' · Joined and active: '+(refs.qualified||0)+'.';}
+ }catch(error){if(note)note.textContent='Could not load streak information right now. Try again later.';console.warn('Community summary failed',error)}
+}
 async function loadDashboard(){
   const connection=$('#connection'),dot=$('.status-dot');
   const setConnection=(message,color)=>{if(connection)connection.textContent=message;if(dot)dot.style.background=color};
   setConnection(navigator.onLine?'Checking API…':'Device offline · local mode','#f0b84d');
-  renderSubjects();renderSidebarAccount();renderDocumentSubjectOptions();fillProfile();
+  renderSubjects();renderSidebarAccount();renderDocumentSubjectOptions();fillProfile();\n  loadCommunitySummary();
   state.journal=[];state.tests=[];state.logs=[];
   const localJournal=localRead('gl_journal'),localTests=localRead('gl_tests'),localLogs=localRead('gl_logs');
   let healthy=false,sessionExpired=false;
