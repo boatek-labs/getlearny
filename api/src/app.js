@@ -234,6 +234,18 @@ app.get('/api/v1/topics',asyncRoute(async(req,res)=>{
   );
   res.json({topics:result.rows});
 }));
+app.get('/api/v1/community/summary',auth,asyncRoute(async(req,res)=>{
+ const result=await query(`SELECT DISTINCT study_day FROM (
+  SELECT (created_at AT TIME ZONE 'UTC')::date AS study_day FROM learning_logs WHERE user_id=$1
+  UNION SELECT (created_at AT TIME ZONE 'UTC')::date AS study_day FROM test_logs WHERE user_id=$1
+ ) activity ORDER BY study_day DESC LIMIT 400`,[req.user.sub]);
+ const days=result.rows.map(row=>String(row.study_day).slice(0,10));
+ const today=new Date().toISOString().slice(0,10);
+ const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+ let current=0,check=days.includes(today)?today:days.includes(yesterday)?yesterday:null;
+ if(check){for(const day of days){if(day!==check)break;current++;const d=new Date(check+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-1);check=d.toISOString().slice(0,10);}}
+ res.json({streak:{current,longest:current,activeDays:days.length,lastStudyDay:days[0]||null},invite:{url:process.env.APP_URL||'https://getlearny.vercel.app',code:String(req.user.sub).replace(/-/g,'').slice(0,10).toUpperCase()}});
+}));
 app.get('/api/v1/dashboard',auth,asyncRoute(async(req,res)=>{const [logs,tests,journal]=await Promise.all([query("SELECT count(*) FILTER(WHERE status='completed')::int AS completed_topics,coalesce(sum(minutes_spent),0)::int AS minutes_studied FROM learning_logs WHERE user_id=$1",[req.user.sub]),query('SELECT count(*)::int AS tests,coalesce(round(avg(score/max_score*100),1),0) AS average_percent FROM test_logs WHERE user_id=$1',[req.user.sub]),query('SELECT count(*)::int AS journal_entries FROM journal_entries WHERE user_id=$1',[req.user.sub])]);res.json({progress:{completedTopics:logs.rows[0].completed_topics,minutesStudied:logs.rows[0].minutes_studied},tests:tests.rows[0],journal:journal.rows[0]})}));
 app.post('/api/v1/learning-logs',auth,asyncRoute(async(req,res)=>{const s=z.object({subject:z.string().min(1).max(100),topic:z.string().min(1).max(200),minutes_spent:z.number().int().min(0).max(1440).default(0),status:z.enum(['started','completed','review']).default('started'),notes:z.string().max(5000).default('')}).safeParse(req.body);if(!s.success)return fail(res,400,s.error.issues[0].message);const d=s.data;const r=await query('INSERT INTO learning_logs(user_id,subject,topic,minutes_spent,status,notes) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[req.user.sub,d.subject,d.topic,d.minutes_spent,d.status,d.notes]);res.status(201).json({log:r.rows[0]})}));
 app.get('/api/v1/learning-logs',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT * FROM learning_logs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[req.user.sub]);res.json({logs:r.rows})}));
