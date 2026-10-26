@@ -187,7 +187,7 @@ app.post('/api/v1/auth/register/request-otp',emailOtpLimiter,asyncRoute(async(re
  const otp=String(randomInt(0,1000000)).padStart(6,'0');
  const otpHash=createHash('sha256').update(email+':'+otp+':'+process.env.JWT_SECRET).digest('hex');
  const passwordHash=await bcrypt.hash(data.password,12);
- await query('INSERT INTO email_verification_codes(email,otp_hash,pending_data,expires_at,attempts) VALUES($1,$2,$3::jsonb,now()+interval \'10 minutes\',0) ON CONFLICT(email) DO UPDATE SET otp_hash=EXCLUDED.otp_hash,pending_data=EXCLUDED.pending_data,expires_at=EXCLUDED.expires_at,attempts=0,created_at=now()',[email,otpHash,JSON.stringify({name:data.name,email,class_level:data.class_level,subjects:normalizeSubjectList(data.subjects),password_hash:passwordHash})]);
+ await query('INSERT INTO email_verification_codes(email,otp_hash,pending_data,expires_at,attempts) VALUES($1,$2,$3::jsonb,now()+interval \'10 minutes\',0) ON CONFLICT(email) DO UPDATE SET otp_hash=EXCLUDED.otp_hash,pending_data=EXCLUDED.pending_data,expires_at=EXCLUDED.expires_at,attempts=0,created_at=now()',[email,otpHash,JSON.stringify({name:data.name,email,class_level:data.class_level,subjects:normalizeSubjectList(data.subjects),password_hash:passwordHash,referral_code:data.referral_code})]);
  let mail;
  try{
   mail=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.EMAIL_FROM,to:[email],subject:'Your GetLearny verification code',text:'Hello '+data.name+',\n\nYour GetLearny verification code is '+otp+'. It expires in 10 minutes. If you did not request this, you can ignore this email.\n\nGetLearny'}),signal:AbortSignal.timeout(10000)});
@@ -210,6 +210,7 @@ app.post('/api/v1/auth/register/verify-otp',emailOtpLimiter,asyncRoute(async(req
  const data=record.pending_data;
  try{
   const created=await query('INSERT INTO users(name,email,password_hash,class_level,subjects) VALUES($1,$2,$3,$4,$5) RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at',[data.name,email,data.password_hash,data.class_level,normalizeSubjectList(data.subjects||[])]);
+  if(data.referral_code){const ref=await query('SELECT owner_user_id FROM referral_codes WHERE code=$1',[data.referral_code]);if(ref.rowCount&&ref.rows[0].owner_user_id!==created.rows[0].id)await query('INSERT INTO referrals(referrer_user_id,referred_user_id,referral_code) VALUES($1,$2,$3) ON CONFLICT(referred_user_id) DO NOTHING',[ref.rows[0].owner_user_id,created.rows[0].id,data.referral_code]);}
   await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);
   const user=created.rows[0];const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});
   res.status(201).json({token,user});
