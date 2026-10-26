@@ -111,7 +111,8 @@ async function loadDashboard(){
   const connection=$('#connection'),dot=$('.status-dot');
   const setConnection=(message,color)=>{if(connection)connection.textContent=message;if(dot)dot.style.background=color};
   setConnection(navigator.onLine?'Checking API…':'Device offline · local mode','#f0b84d');
-  renderSubjects();renderSidebarAccount();renderDocumentSubjectOptions();fillProfile();\n  loadCommunitySummary();
+  renderSubjects();renderSidebarAccount();renderDocumentSubjectOptions();fillProfile();
+  loadCommunitySummary();
   state.journal=[];state.tests=[];state.logs=[];
   const localJournal=localRead('gl_journal'),localTests=localRead('gl_tests'),localLogs=localRead('gl_logs');
   let healthy=false,sessionExpired=false;
