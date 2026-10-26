@@ -241,10 +241,17 @@ app.get('/api/v1/community/summary',auth,asyncRoute(async(req,res)=>{
  let referral=await query('SELECT code FROM referral_codes WHERE owner_user_id=$1',[req.user.sub]);
  if(!referral.rowCount){const code=randomUUID().replace(/-/g,'').slice(0,12).toUpperCase();referral=await query('INSERT INTO referral_codes(owner_user_id,code) VALUES($1,$2) ON CONFLICT(owner_user_id) DO UPDATE SET owner_user_id=EXCLUDED.owner_user_id RETURNING code',[req.user.sub,code]);}
  const result=await query(`SELECT DISTINCT study_day FROM (
-  SELECT (created_at AT TIME ZONE 'UTC')::date AS study_day FROM learning_logs WHERE user_id=$1 AND (status='completed' OR minutes_spent>0)
-  UNION SELECT (taken_at AT TIME ZONE 'UTC')::date AS study_day FROM test_logs WHERE user_id=$1
+  SELECT to_char((created_at AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS study_day FROM learning_logs WHERE user_id=$1 AND (status='completed' OR minutes_spent>0)
+  UNION SELECT to_char((taken_at AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS study_day FROM test_logs WHERE user_id=$1
  ) activity ORDER BY study_day DESC LIMIT 400`,[req.user.sub]);
- const days=result.rows.map(row=>String(row.study_day).slice(0,10));
+ // PostgreSQL date values can arrive as Date objects depending on driver configuration.
+ // Keep the streak algorithm operating only on validated YYYY-MM-DD strings.
+ const days=result.rows.map(row=>{
+  const value=row.study_day instanceof Date
+   ? (Number.isNaN(row.study_day.getTime())?'':row.study_day.toISOString().slice(0,10))
+   : String(row.study_day??'').slice(0,10);
+  return /^\\d{4}-\\d{2}-\\d{2}$/.test(value)?value:'';
+ }).filter(Boolean);
  const today=new Date().toISOString().slice(0,10),yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
  let current=0,check=days.includes(today)?today:days.includes(yesterday)?yesterday:null;
  if(check){for(const day of days){if(day!==check)break;current++;const d=new Date(check+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-1);check=d.toISOString().slice(0,10);}}
