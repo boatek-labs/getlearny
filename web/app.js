@@ -104,7 +104,7 @@ async function loadCommunitySummary(){
   if(buddy)buddy.onclick=()=>shareLink('Study with me on GetLearny','Join me on GetLearny and let’s build a consistent study habit.');
   if(share)share.onclick=()=>shareLink('GetLearny','Learn with purpose. Join GetLearny.');
   if(copy)copy.onclick=async()=>{try{await navigator.clipboard.writeText(url.toString());if(note)note.textContent='Your invite link has been copied.'}catch{if(note)note.textContent='Copy this link: '+url.toString()}};
-  if(note)note.textContent=streak.current?'You’re building consistency — keep learning each day.':'Complete a lesson or practice to start building your streak.';
+  if(note){const refs=data.referral||{};note.textContent=(streak.current?'You’re building consistency — keep learning each day.':'Complete a lesson or practice to start building your streak.')+' Invites: '+(refs.invited||0)+' · Joined and active: '+(refs.qualified||0)+'.';}
  }catch(error){if(note)note.textContent='Could not load streak information right now. Try again later.';console.warn('Community summary failed',error)}
 }
 async function loadDashboard(){
