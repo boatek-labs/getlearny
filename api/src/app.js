@@ -104,7 +104,7 @@ const pushReady=()=>Boolean(process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIV
 function configurePush(){if(pushReady())webPush.setVapidDetails(process.env.VAPID_SUBJECT,process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY)}
 configurePush();
 function auth(req,res,next){const value=req.headers.authorization||'';const token=value.startsWith('Bearer ')?value.slice(7):'';if(!token||!envReady())return fail(res,401,'Sign in required');try{req.user=jwt.verify(token,process.env.JWT_SECRET,{issuer:'getlearny-api',audience:'getlearny-app'});next()}catch{return fail(res,401,'Session expired. Sign in again.')}}
-const registration=z.object({name:z.string().trim().min(2).max(120),email:z.string().trim().email().max(254),password:z.string().min(8).max(128),class_level:z.string().trim().max(100).optional().default(''),subjects:z.array(z.string().trim().min(1).max(120)).max(40).optional().default([])});
+const registration=z.object({name:z.string().trim().min(2).max(120),email:z.string().trim().email().max(254),password:z.string().min(8).max(128),class_level:z.string().trim().max(100).optional().default(''),subjects:z.array(z.string().trim().min(1).max(120)).max(40).optional().default([]),referral_code:z.string().trim().max(32).optional().default('')});
 function subjectIdentity(value){const cleaned=String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase('en');const aliases={'english':'english language','core math':'core mathematics','core maths':'core mathematics','math':'core mathematics','maths':'core mathematics','add math':'additional mathematics','add maths':'additional mathematics','elective mathematics':'additional mathematics','elective maths':'additional mathematics','comp sci':'computer science'};return aliases[cleaned]||cleaned}
 function normalizeSubjectList(values=[]){const seen=new Set();return values.map(value=>String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ')).filter(value=>{if(!value)return false;const key=subjectIdentity(value);if(seen.has(key))return false;seen.add(key);return true})}
 const login=z.object({email:z.string().trim().email().max(254),password:z.string().min(8).max(128)});
@@ -235,16 +235,19 @@ app.get('/api/v1/topics',asyncRoute(async(req,res)=>{
   res.json({topics:result.rows});
 }));
 app.get('/api/v1/community/summary',auth,asyncRoute(async(req,res)=>{
+ let referral=await query('SELECT code FROM referral_codes WHERE owner_user_id=$1',[req.user.sub]);
+ if(!referral.rowCount){const code=randomUUID().replace(/-/g,'').slice(0,12).toUpperCase();referral=await query('INSERT INTO referral_codes(owner_user_id,code) VALUES($1,$2) ON CONFLICT(owner_user_id) DO UPDATE SET owner_user_id=EXCLUDED.owner_user_id RETURNING code',[req.user.sub,code]);}
  const result=await query(`SELECT DISTINCT study_day FROM (
-  SELECT (created_at AT TIME ZONE 'UTC')::date AS study_day FROM learning_logs WHERE user_id=$1
-  UNION SELECT (created_at AT TIME ZONE 'UTC')::date AS study_day FROM test_logs WHERE user_id=$1
+  SELECT (created_at AT TIME ZONE 'UTC')::date AS study_day FROM learning_logs WHERE user_id=$1 AND (status='completed' OR minutes_spent>0)
+  UNION SELECT (taken_at AT TIME ZONE 'UTC')::date AS study_day FROM test_logs WHERE user_id=$1
  ) activity ORDER BY study_day DESC LIMIT 400`,[req.user.sub]);
  const days=result.rows.map(row=>String(row.study_day).slice(0,10));
- const today=new Date().toISOString().slice(0,10);
- const yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+ const today=new Date().toISOString().slice(0,10),yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
  let current=0,check=days.includes(today)?today:days.includes(yesterday)?yesterday:null;
  if(check){for(const day of days){if(day!==check)break;current++;const d=new Date(check+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-1);check=d.toISOString().slice(0,10);}}
- let longest=0,run=0,previous=null;for(const day of [...days].sort()){if(previous){const d=new Date(previous+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+1);run=day===d.toISOString().slice(0,10)?run+1:1}else run=1;longest=Math.max(longest,run);previous=day;}\n res.json({streak:{current,longest,activeDays:days.length,lastStudyDay:days[0]||null},invite:{url:process.env.APP_URL||'https://getlearny.vercel.app',code:String(req.user.sub).replace(/-/g,'').slice(0,10).toUpperCase()}});
+ let longest=0,run=0,previous=null;for(const day of [...days].sort()){if(previous){const d=new Date(previous+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+1);run=day===d.toISOString().slice(0,10)?run+1:1}else run=1;longest=Math.max(longest,run);previous=day;}
+ const referrals=await query('SELECT count(*)::int AS invited,count(*) FILTER(WHERE qualified_at IS NOT NULL)::int AS qualified FROM referrals WHERE referrer_user_id=$1',[req.user.sub]);
+ res.json({streak:{current,longest,activeDays:days.length,lastStudyDay:days[0]||null},referral:referrals.rows[0],invite:{url:process.env.APP_URL||'https://getlearny.vercel.app',code:referral.rows[0].code}});
 }));
 app.get('/api/v1/dashboard',auth,asyncRoute(async(req,res)=>{const [logs,tests,journal]=await Promise.all([query("SELECT count(*) FILTER(WHERE status='completed')::int AS completed_topics,coalesce(sum(minutes_spent),0)::int AS minutes_studied FROM learning_logs WHERE user_id=$1",[req.user.sub]),query('SELECT count(*)::int AS tests,coalesce(round(avg(score/max_score*100),1),0) AS average_percent FROM test_logs WHERE user_id=$1',[req.user.sub]),query('SELECT count(*)::int AS journal_entries FROM journal_entries WHERE user_id=$1',[req.user.sub])]);res.json({progress:{completedTopics:logs.rows[0].completed_topics,minutesStudied:logs.rows[0].minutes_studied},tests:tests.rows[0],journal:journal.rows[0]})}));
 app.post('/api/v1/learning-logs',auth,asyncRoute(async(req,res)=>{const s=z.object({subject:z.string().min(1).max(100),topic:z.string().min(1).max(200),minutes_spent:z.number().int().min(0).max(1440).default(0),status:z.enum(['started','completed','review']).default('started'),notes:z.string().max(5000).default('')}).safeParse(req.body);if(!s.success)return fail(res,400,s.error.issues[0].message);const d=s.data;const r=await query('INSERT INTO learning_logs(user_id,subject,topic,minutes_spent,status,notes) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[req.user.sub,d.subject,d.topic,d.minutes_spent,d.status,d.notes]);res.status(201).json({log:r.rows[0]})}));
