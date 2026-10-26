@@ -10,7 +10,7 @@
     "api"
   ],
   "scripts": {
-    "build": "node -e \"console.log('GetLearny web and API are ready for Vercel')\"",
+    "build": "npm --workspace getlearny-api run build && npm --workspace getlearny-api test",
     "db:migrate": "npm --workspace getlearny-api run db:migrate",
     "check": "npm --workspace getlearny-api run check && npm --workspace getlearny-api test"
   }
