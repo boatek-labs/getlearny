@@ -14,6 +14,7 @@ import webPush from 'web-push';
 import pdfParse from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
 import { query, health } from './db.js';
+import { normalizeStudyDays, computeStreak } from './streak.js';
 
 const app=express();
 // Vercel sits in front of this serverless function and forwards the client IP.
@@ -244,23 +245,9 @@ app.get('/api/v1/community/summary',auth,asyncRoute(async(req,res)=>{
   SELECT to_char((created_at AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS study_day FROM learning_logs WHERE user_id=$1 AND (status='completed' OR minutes_spent>0)
   UNION SELECT to_char((taken_at AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS study_day FROM test_logs WHERE user_id=$1
  ) activity ORDER BY study_day DESC LIMIT 400`,[req.user.sub]);
- // PostgreSQL date values can arrive as Date objects depending on driver configuration.
- // Keep the streak algorithm operating only on validated YYYY-MM-DD strings.
- const days=result.rows.map(row=>{
-  const value=row.study_day instanceof Date
-   ? (Number.isNaN(row.study_day.getTime())?'':row.study_day.toISOString().slice(0,10))
-   : String(row.study_day??'').slice(0,10);
-  return /^\\d{4}-\\d{2}-\\d{2}$/.test(value)?value:'';
- }).filter(Boolean);
- const today=new Date().toISOString().slice(0,10),yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
- let current=0,check=days.includes(today)?today:days.includes(yesterday)?yesterday:null;
- if(check){for(const day of days){if(day!==check)break;current++;const d=new Date(check+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-1);check=d.toISOString().slice(0,10);}}
- let longest=0,run=0,previous=null;for(const day of [...days].sort()){if(previous){const d=new Date(previous+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+1);run=day===d.toISOString().slice(0,10)?run+1:1}else run=1;longest=Math.max(longest,run);previous=day;}
- // Referral qualification requires recorded study activity, not just a sign-in.
- const hasStudyActivity=days.length>0;
- if(hasStudyActivity)await query('UPDATE referrals SET qualified_at=COALESCE(qualified_at,now()) WHERE referred_user_id=$1',[req.user.sub]);
- const referrals=await query('SELECT count(*)::int AS invited,count(*) FILTER(WHERE qualified_at IS NOT NULL)::int AS qualified FROM referrals WHERE referrer_user_id=$1',[req.user.sub]);
- res.json({streak:{current,longest,activeDays:days.length,lastStudyDay:days[0]||null},referral:referrals.rows[0],invite:{url:process.env.APP_URL||'https://getlearny.vercel.app',code:referral.rows[0].code}});
+ const days=normalizeStudyDays(result.rows);
+ const streak=computeStreak(days);
+ res.json({referralCode:referral.rows[0].code,streak:streak.current,longestStreak:streak.longest,activeDays:streak.activeDays,lastStudyDay:streak.lastStudyDay});
 }));
 app.get('/api/v1/dashboard',auth,asyncRoute(async(req,res)=>{const [logs,tests,journal]=await Promise.all([query("SELECT count(*) FILTER(WHERE status='completed')::int AS completed_topics,coalesce(sum(minutes_spent),0)::int AS minutes_studied FROM learning_logs WHERE user_id=$1",[req.user.sub]),query('SELECT count(*)::int AS tests,coalesce(round(avg(score/max_score*100),1),0) AS average_percent FROM test_logs WHERE user_id=$1',[req.user.sub]),query('SELECT count(*)::int AS journal_entries FROM journal_entries WHERE user_id=$1',[req.user.sub])]);res.json({progress:{completedTopics:logs.rows[0].completed_topics,minutesStudied:logs.rows[0].minutes_studied},tests:tests.rows[0],journal:journal.rows[0]})}));
 app.post('/api/v1/learning-logs',auth,asyncRoute(async(req,res)=>{const s=z.object({subject:z.string().min(1).max(100),topic:z.string().min(1).max(200),minutes_spent:z.number().int().min(0).max(1440).default(0),status:z.enum(['started','completed','review']).default('started'),notes:z.string().max(5000).default('')}).safeParse(req.body);if(!s.success)return fail(res,400,s.error.issues[0].message);const d=s.data;const r=await query('INSERT INTO learning_logs(user_id,subject,topic,minutes_spent,status,notes) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[req.user.sub,d.subject,d.topic,d.minutes_spent,d.status,d.notes]);if(d.status==='completed'||d.minutes_spent>0)await query('UPDATE referrals SET qualified_at=COALESCE(qualified_at,now()) WHERE referred_user_id=$1',[req.user.sub]);res.status(201).json({log:r.rows[0]})}));
