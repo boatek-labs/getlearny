@@ -115,7 +115,7 @@ const journalSchema=z.object({learned:z.string().trim().min(1).max(5000),difficu
 
 registerConsentRoutes(app,{asyncRoute,authAny,fail});
 app.post('/api/v1/me/age-declaration',authAny,asyncRoute(async(req,res)=>{
- const parsed=z.object({date_of_birth:z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/),accept_terms:z.literal(true),guardian_email:z.string().trim().email().max(254).optional().default('')}).safeParse(req.body);
+ const parsed=z.object({date_of_birth:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),accept_terms:z.literal(true),guardian_email:z.string().trim().email().max(254).optional().default('')}).safeParse(req.body);
  if(!parsed.success)return fail(res,400,'Enter a valid date of birth and accept the Terms of Use and Privacy Notice.');
  const current=await query('SELECT id,name,email,date_of_birth,terms_version FROM users WHERE id=$1',[req.user.sub]);if(!current.rowCount)return fail(res,404,'Account not found');
  if(current.rows[0].date_of_birth&&current.rows[0].terms_version===TERMS_VERSION)return fail(res,409,'Your account details are already up to date.');
@@ -123,7 +123,7 @@ app.post('/api/v1/me/age-declaration',authAny,asyncRoute(async(req,res)=>{
  const age=ageOn(dobToSave);if(!Number.isFinite(age)||age<10)return fail(res,400,'You must be at least 10 years old to use GetLearny.');
  if(age<ADULT_AGE){if(!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');if(!parsed.data.guardian_email||parsed.data.guardian_email.toLowerCase()===String(current.rows[0].email).toLowerCase())return fail(res,400,'Enter a parent or guardian email different from your own.');}
  const status=age<ADULT_AGE?'pending_guardian':'active';
- await query('UPDATE users SET date_of_birth=$1,age_declared_at=now(),terms_accepted_at=now(),terms_version=$2,account_status=$3,updated_at=now() WHERE id=$4',[parsed.data.date_of_birth,TERMS_VERSION,status,req.user.sub]);
+ await query('UPDATE users SET date_of_birth=$1,age_declared_at=COALESCE(age_declared_at,now()),terms_accepted_at=now(),terms_version=$2,account_status=$3,updated_at=now() WHERE id=$4',[dobToSave,TERMS_VERSION,status,req.user.sub]);
  if(age<ADULT_AGE){const approval=await createGuardianRequest({userId:req.user.sub,childName:current.rows[0].name,kind:'account',guardianEmail:parsed.data.guardian_email});return res.status(202).json({guardian_pending:true,guardian_email_sent:approval.sent,message:'Your parent or guardian must approve the account before you can continue.'});}
  res.json({saved:true,account_status:'active'});
 }));
