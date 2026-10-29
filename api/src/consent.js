@@ -127,7 +127,7 @@ export function registerConsentRoutes(app, { asyncRoute, authAny, fail }) {
     const age = ageOn(String(user.rows[0].date_of_birth).slice(0, 10));
     if (age < ADULT_AGE && choice === 'granted') {
       const guardianEmail = String(req.body?.guardian_email || '').trim().toLowerCase();
-      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(guardianEmail) || guardianEmail === String(user.rows[0].email).toLowerCase()) return fail(res, 400, 'Enter a valid parent or guardian email different from your own.');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guardianEmail) || guardianEmail === String(user.rows[0].email).toLowerCase()) return fail(res, 400, 'Enter a valid parent or guardian email different from your own.');
       if (!guardianEmailReady()) return fail(res, 503, 'Parent approval emails are not configured yet. Please try again later.');
       const approval = await createGuardianRequest({ userId: req.user.sub, childName: user.rows[0].name, kind: 'location', guardianEmail });
       return res.status(202).json({ saved: false, guardian_pending: true, guardian_email_sent: approval.sent, message: 'Location consent is pending parent or guardian approval. No location data is collected by this version of GetLearny.' });
