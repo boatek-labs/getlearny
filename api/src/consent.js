@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { query } from './db.js';
+import { sendEmail, emailConfigured } from './mailer.js';
 
 export const TERMS_VERSION = '2026-10-27';
 export const LOCATION_CONSENT_VERSION = '2026-10-27';
@@ -43,18 +44,7 @@ export function publicUser(user) {
 }
 
 export function guardianEmailReady() {
-  return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM && process.env.APP_URL);
-}
-
-async function sendEmail(to, subject, text) {
-  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) return false;
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + process.env.RESEND_API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: process.env.EMAIL_FROM, to: [to], subject, text }),
-    signal: AbortSignal.timeout(10000)
-  });
-  return response.ok;
+  return Boolean(emailConfigured() && process.env.APP_URL);
 }
 
 export async function createGuardianRequest({ userId, childName, kind = 'account', guardianEmail }) {
@@ -69,7 +59,7 @@ export async function createGuardianRequest({ userId, childName, kind = 'account
   try {
     sent = await sendEmail(guardianEmail, 'Approve a GetLearny account', 'Hello,\n\n' + childName + ' has requested to use GetLearny. Review the request and choose approve or decline here:\n' + link + '\n\nThis link expires in 7 days. If you did not expect this message, you can ignore it.');
   } catch (error) {
-    console.error('Guardian approval email failed:', error?.message || 'email error');
+    console.error('Guardian approval email failed:', error?.message || 'SMTP error');
   }
   return { id: created.rows[0].id, sent };
 }
