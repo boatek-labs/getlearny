@@ -15,7 +15,7 @@ function getTransport() {
       secure: String(process.env.SMTP_SECURE ?? (port === 465)).toLowerCase() === 'true',
       auth: {
         user: process.env.SMTP_USER,
-        pass: String(process.env.SMTP_PASS).replace(/\\s/g, '')
+        pass: String(process.env.SMTP_PASS).replace(/\s/g, '')
       },
       connectionTimeout: 10000,
       greetingTimeout: 10000,
