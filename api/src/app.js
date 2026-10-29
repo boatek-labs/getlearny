@@ -194,7 +194,7 @@ app.post('/api/v1/auth/register/request-otp',emailOtpLimiter,asyncRoute(async(re
  try{
   mail=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.EMAIL_FROM,to:[email],subject:'Your GetLearny verification code',text:'Hello '+data.name+',\n\nYour GetLearny verification code is '+otp+'. It expires in 10 minutes. If you did not request this, you can ignore this email.\n\nGetLearny'}),signal:AbortSignal.timeout(10000)});
  }catch{return fail(res,502,'The verification email could not be sent because the email service timed out. Please try again.')}
- if(!mail.ok){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,502,'The verification email could not be sent. Check the email service configuration and try again.')}
+ if(!mail.ok){let providerError='';try{providerError=await mail.text()}catch{} console.error('[email-otp] Resend rejected verification email',{status:mail.status,body:providerError.slice(0,1200)});await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,502,'Resend rejected the verification email (HTTP '+mail.status+'). Check the sender/domain verification and recipient restrictions in Resend, then try again.')}
  res.status(202).json({message:'Verification code sent. Check your inbox and spam folder.',email,expiresInSeconds:600});
 }));
 app.post('/api/v1/auth/register/verify-otp',emailOtpLimiter,asyncRoute(async(req,res)=>{
