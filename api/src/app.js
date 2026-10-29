@@ -163,24 +163,30 @@ app.post('/api/v1/auth/google',asyncRoute(async(req,res)=>{
  if(claims.aud!==clientId||(claims.email_verified!==true&&claims.email_verified!=='true')||!claims.email||!claims.sub)return fail(res,401,'Google account verification failed.');
  const email=String(claims.email).trim().toLowerCase();
  const displayName=String(claims.name||claims.given_name||email.split('@')[0]).trim().slice(0,120);
- let found=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,created_at FROM users WHERE email=$1',[email]);
- let user=found.rows[0];
+ const found=await query(`SELECT ${USER_COLUMNS} FROM users WHERE email=$1`,[email]);
+ let user=found.rows[0];let createdNew=false,consent=null;
+ if(user){const gate=accountGate(user.account_status);if(gate)return res.status(403).json({error:gate.message,code:gate.code,can_resend:true});}
  if(!user){
+  consent=validateSignupConsent(req.body,email);
+  if(!consent.ok){if(!req.body?.date_of_birth)return res.json({needs_age:true,name:displayName,terms_version:TERMS_VERSION});return res.status(400).json({error:consent.error,needs_guardian:Boolean(consent.needsGuardian)});}
+  if(consent.minor&&!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');
   const passwordHash=await bcrypt.hash(randomUUID()+randomUUID(),12);
   try{
-   const created=await query("INSERT INTO users(name,email,password_hash,class_level,subjects) VALUES($1,$2,$3,$4,$5) RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at",[displayName,email,passwordHash,'',[]]);
-   user=created.rows[0];
+   const created=await query(`INSERT INTO users(name,email,password_hash,class_level,subjects,date_of_birth,age_declared_at,terms_accepted_at,terms_version,account_status) VALUES($1,$2,$3,$4,$5,$6,now(),now(),$7,$8) RETURNING ${USER_COLUMNS}`,[displayName,email,passwordHash,'',[],consent.dob,TERMS_VERSION,consent.minor?'pending_guardian':'active']);
+   user=created.rows[0];createdNew=true;
    const referralCode=typeof req.body?.referral_code==='string'?req.body.referral_code.trim().slice(0,32):'';
    if(referralCode){const ref=await query('SELECT owner_user_id FROM referral_codes WHERE code=$1',[referralCode]);if(ref.rowCount&&ref.rows[0].owner_user_id!==user.id)await query('INSERT INTO referrals(referrer_user_id,referred_user_id,referral_code) VALUES($1,$2,$3) ON CONFLICT(referred_user_id) DO NOTHING',[ref.rows[0].owner_user_id,user.id,referralCode]);}
   }catch(error){
    if(error.code!=='23505')throw error;
-   found=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,created_at FROM users WHERE email=$1',[email]);
-   user=found.rows[0];
+   const again=await query(`SELECT ${USER_COLUMNS} FROM users WHERE email=$1`,[email]);
+   user=again.rows[0];
    if(!user)throw error;
+   const gate=accountGate(user.account_status);if(gate)return res.status(403).json({error:gate.message,code:gate.code,can_resend:true});
   }
  }
+ if(createdNew&&consent?.minor){const approval=await createGuardianRequest({userId:user.id,childName:user.name,kind:'account',guardianEmail:consent.guardianEmail});return res.status(202).json({guardian_pending:true,guardian_email_sent:approval.sent,user:publicUser(user),message:'Account created. Your parent or guardian must approve it before you can sign in.'});}
  const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});
- res.json({token,user,created:!found.rowCount});
+ res.json({token,user:publicUser(user),created:createdNew});
 }));
 app.post('/api/v1/auth/register/request-otp',emailOtpLimiter,asyncRoute(async(req,res)=>{
  if(!envReady())return fail(res,503,'Authentication is not configured');
