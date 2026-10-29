@@ -15,6 +15,7 @@ import pdfParse from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
 import { query, health } from './db.js';
 import { normalizeStudyDays, computeStreak } from './streak.js';
+import { TERMS_VERSION, ADULT_AGE, USER_COLUMNS, ageOn, validateSignupConsent, accountGate, publicUser, guardianEmailReady, createGuardianRequest, registerConsentRoutes } from './consent.js';
 
 const app=express();
 // Vercel sits in front of this serverless function and forwards the client IP.
@@ -104,13 +105,15 @@ const emailOtpLimiter=rateLimit({windowMs:15*60*1000,limit:5,standardHeaders:tru
 const pushReady=()=>Boolean(process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT);
 function configurePush(){if(pushReady())webPush.setVapidDetails(process.env.VAPID_SUBJECT,process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY)}
 configurePush();
-function auth(req,res,next){const value=req.headers.authorization||'';const token=value.startsWith('Bearer ')?value.slice(7):'';if(!token||!envReady())return fail(res,401,'Sign in required');try{req.user=jwt.verify(token,process.env.JWT_SECRET,{issuer:'getlearny-api',audience:'getlearny-app'});next()}catch{return fail(res,401,'Session expired. Sign in again.')}}
-const registration=z.object({name:z.string().trim().min(2).max(120),email:z.string().trim().email().max(254),password:z.string().min(8).max(128),class_level:z.string().trim().max(100).optional().default(''),subjects:z.array(z.string().trim().min(1).max(120)).max(40).optional().default([]),referral_code:z.string().trim().max(32).optional().default('')});
+function authAny(req,res,next){const value=req.headers.authorization||'';const token=value.startsWith('Bearer ')?value.slice(7):'';if(!token||!envReady())return fail(res,401,'Sign in required');try{req.user=jwt.verify(token,process.env.JWT_SECRET,{issuer:'getlearny-api',audience:'getlearny-app'});next()}catch{return fail(res,401,'Session expired. Sign in again.')}}
+function auth(req,res,next){authAny(req,res,()=>{query('SELECT account_status FROM users WHERE id=$1',[req.user.sub]).then(r=>{if(!r.rowCount)return fail(res,401,'Session expired. Sign in again.');const gate=accountGate(r.rows[0].account_status);if(gate)return res.status(403).json({error:gate.message,code:gate.code});next()}).catch(next)})}
+const registration=z.object({name:z.string().trim().min(2).max(120),email:z.string().trim().email().max(254),password:z.string().min(8).max(128),class_level:z.string().trim().max(100).optional().default(''),subjects:z.array(z.string().trim().min(1).max(120)).max(40).optional().default([]),referral_code:z.string().trim().max(32).optional().default(''),date_of_birth:z.string().trim().max(10).optional().default(''),accept_terms:z.boolean().optional().default(false),guardian_email:z.string().trim().max(254).optional().default('')});
 function subjectIdentity(value){const cleaned=String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase('en');const aliases={'english':'english language','core math':'core mathematics','core maths':'core mathematics','math':'core mathematics','maths':'core mathematics','add math':'additional mathematics','add maths':'additional mathematics','elective mathematics':'additional mathematics','elective maths':'additional mathematics','comp sci':'computer science'};return aliases[cleaned]||cleaned}
 function normalizeSubjectList(values=[]){const seen=new Set();return values.map(value=>String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ')).filter(value=>{if(!value)return false;const key=subjectIdentity(value);if(seen.has(key))return false;seen.add(key);return true})}
 const login=z.object({email:z.string().trim().email().max(254),password:z.string().min(8).max(128)});
 const journalSchema=z.object({learned:z.string().trim().min(1).max(5000),difficult:z.string().max(5000).optional().default(''),next_step:z.string().max(2000).optional().default('')});
 
+registerConsentRoutes(app,{asyncRoute,authAny,fail});
 app.get('/api/v1/notifications/public-key',(_req,res)=>res.json({configured:pushReady(),publicKey:pushReady()?process.env.VAPID_PUBLIC_KEY:null}));
 app.post('/api/v1/notifications/subscriptions',auth,asyncRoute(async(req,res)=>{
  if(!pushReady())return fail(res,503,'Background push notifications are not configured yet');
