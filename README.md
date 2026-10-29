@@ -74,16 +74,24 @@ In the Android app, open a subject while online and choose **Download next 3 les
 Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Browser email verification requires a Gmail SMTP API key and a sender address on a verified domain; Google OAuth, password reset, background web push, and stable Android release signing still require their real provider credentials/configuration. Image OCR is local via Tesseract; scanned-PDF OCR uses Gemini where supported.
 
 
-### Email verification for browser signup
+### Email verification and guardian approvals (Gmail SMTP)
 
-The browser signup flow sends a six-digit code through Gmail SMTP before creating the account. Codes expire after 10 minutes, are stored as hashes, and are limited to five verification requests/attempts per 15-minute window. Configure these API environment variables in Vercel and in `api/.env` for local development:
+Browser signup sends a six-digit verification code through Gmail SMTP before creating the account. Parent/guardian approval emails use the same mailer. Codes expire after 10 minutes and are stored as hashes.
+
+Configure these API environment variables in Vercel and in `api/.env` for local development:
 
 ```dotenv
-SMTP_USER and SMTP_PASS=re_your_Gmail SMTP_api_key
-EMAIL_FROM=GetLearny <verify@your-verified-domain.com>
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your-getlearny-gmail@gmail.com
+SMTP_PASS=your-16-character-Google-App-Password
+EMAIL_FROM=GetLearny <your-getlearny-gmail@gmail.com>
+APP_URL=https://your-getlearny-site.example
 ```
 
-Verify the sender domain in Gmail SMTP before sending to real learners. Keep the API key server-side; never add it to browser JavaScript or Flutter configuration. If the variables are missing, signup displays a configuration error rather than pretending an email was sent.
+For Gmail, enable 2-Step Verification on the sending Google account and create a Google **App Password**. Use that 16-character App Password for `SMTP_PASS`, not your normal Gmail password. Keep these values only in the server/API environment; never put them in browser JavaScript or Flutter configuration. If mail credentials are missing or incorrect, verification and guardian email sending will fail with a visible error.
+
 
 ## Gemini AI environment template
 
