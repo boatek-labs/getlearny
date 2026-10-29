@@ -57,7 +57,8 @@ export async function createGuardianRequest({ userId, childName, kind = 'account
   const link = String(process.env.APP_URL).replace(/\/$/, '') + '/guardian.html?token=' + encodeURIComponent(rawToken);
   let sent = false;
   try {
-    sent = await sendEmail(guardianEmail, 'Approve a GetLearny account', 'Hello,\n\n' + childName + ' has requested to use GetLearny. Review the request and choose approve or decline here:\n' + link + '\n\nThis link expires in 7 days. If you did not expect this message, you can ignore it.');
+    await sendEmail({to:guardianEmail,subject:'Approve a GetLearny account',text:'Hello,\\n\\n' + childName + ' has requested to use GetLearny. Review the request and choose approve or decline here:\\n' + link + '\\n\\nThis link expires in 7 days. If you did not expect this message, you can ignore it.'});
+    sent = true;
   } catch (error) {
     console.error('Guardian approval email failed:', error?.message || 'SMTP error');
   }
