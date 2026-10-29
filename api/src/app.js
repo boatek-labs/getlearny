@@ -14,6 +14,8 @@ import webPush from 'web-push';
 import pdfParse from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
 import { query, health } from './db.js';
+import { normalizeStudyDays, computeStreak } from './streak.js';
+import { TERMS_VERSION, ADULT_AGE, USER_COLUMNS, ageOn, validateSignupConsent, accountGate, publicUser, guardianEmailReady, createGuardianRequest, registerConsentRoutes } from './consent.js';
 
 const app=express();
 // Vercel sits in front of this serverless function and forwards the client IP.
@@ -103,13 +105,28 @@ const emailOtpLimiter=rateLimit({windowMs:15*60*1000,limit:5,standardHeaders:tru
 const pushReady=()=>Boolean(process.env.VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT);
 function configurePush(){if(pushReady())webPush.setVapidDetails(process.env.VAPID_SUBJECT,process.env.VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY)}
 configurePush();
-function auth(req,res,next){const value=req.headers.authorization||'';const token=value.startsWith('Bearer ')?value.slice(7):'';if(!token||!envReady())return fail(res,401,'Sign in required');try{req.user=jwt.verify(token,process.env.JWT_SECRET,{issuer:'getlearny-api',audience:'getlearny-app'});next()}catch{return fail(res,401,'Session expired. Sign in again.')}}
-const registration=z.object({name:z.string().trim().min(2).max(120),email:z.string().trim().email().max(254),password:z.string().min(8).max(128),class_level:z.string().trim().max(100).optional().default(''),subjects:z.array(z.string().trim().min(1).max(120)).max(40).optional().default([]),referral_code:z.string().trim().max(32).optional().default('')});
+function authAny(req,res,next){const value=req.headers.authorization||'';const token=value.startsWith('Bearer ')?value.slice(7):'';if(!token||!envReady())return fail(res,401,'Sign in required');try{req.user=jwt.verify(token,process.env.JWT_SECRET,{issuer:'getlearny-api',audience:'getlearny-app'});next()}catch{return fail(res,401,'Session expired. Sign in again.')}}
+function auth(req,res,next){authAny(req,res,()=>{query('SELECT account_status,date_of_birth,terms_version FROM users WHERE id=$1',[req.user.sub]).then(r=>{if(!r.rowCount)return fail(res,401,'Session expired. Sign in again.');const gate=accountGate(r.rows[0].account_status);if(gate)return res.status(403).json({error:gate.message,code:gate.code});if(!r.rows[0].date_of_birth||!r.rows[0].terms_version)return res.status(403).json({error:'Please confirm your date of birth and accept the current Terms of Use before continuing.',code:'AGE_DECLARATION_REQUIRED'});if(r.rows[0].terms_version!==TERMS_VERSION)return res.status(403).json({error:'Please review and accept the updated Terms of Use before continuing.',code:'TERMS_REACCEPT_REQUIRED'});next()}).catch(next)})}
+const registration=z.object({name:z.string().trim().min(2).max(120),email:z.string().trim().email().max(254),password:z.string().min(8).max(128),class_level:z.string().trim().max(100).optional().default(''),subjects:z.array(z.string().trim().min(1).max(120)).max(40).optional().default([]),referral_code:z.string().trim().max(32).optional().default(''),date_of_birth:z.string().trim().max(10).optional().default(''),accept_terms:z.boolean().optional().default(false),guardian_email:z.string().trim().max(254).optional().default('')});
 function subjectIdentity(value){const cleaned=String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase('en');const aliases={'english':'english language','core math':'core mathematics','core maths':'core mathematics','math':'core mathematics','maths':'core mathematics','add math':'additional mathematics','add maths':'additional mathematics','elective mathematics':'additional mathematics','elective maths':'additional mathematics','comp sci':'computer science'};return aliases[cleaned]||cleaned}
 function normalizeSubjectList(values=[]){const seen=new Set();return values.map(value=>String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ')).filter(value=>{if(!value)return false;const key=subjectIdentity(value);if(seen.has(key))return false;seen.add(key);return true})}
 const login=z.object({email:z.string().trim().email().max(254),password:z.string().min(8).max(128)});
 const journalSchema=z.object({learned:z.string().trim().min(1).max(5000),difficult:z.string().max(5000).optional().default(''),next_step:z.string().max(2000).optional().default('')});
 
+registerConsentRoutes(app,{asyncRoute,authAny,fail});
+app.post('/api/v1/me/age-declaration',authAny,asyncRoute(async(req,res)=>{
+ const parsed=z.object({date_of_birth:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),accept_terms:z.literal(true),guardian_email:z.string().trim().email().max(254).optional().default('')}).safeParse(req.body);
+ if(!parsed.success)return fail(res,400,'Enter a valid date of birth and accept the Terms of Use and Privacy Notice.');
+ const current=await query('SELECT id,name,email,date_of_birth,terms_version FROM users WHERE id=$1',[req.user.sub]);if(!current.rowCount)return fail(res,404,'Account not found');
+ if(current.rows[0].date_of_birth&&current.rows[0].terms_version===TERMS_VERSION)return fail(res,409,'Your account details are already up to date.');
+ const dobToSave=current.rows[0].date_of_birth?String(current.rows[0].date_of_birth).slice(0,10):parsed.data.date_of_birth;
+ const age=ageOn(dobToSave);if(!Number.isFinite(age)||age<10)return fail(res,400,'You must be at least 10 years old to use GetLearny.');
+ if(age<ADULT_AGE){if(!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');if(!parsed.data.guardian_email||parsed.data.guardian_email.toLowerCase()===String(current.rows[0].email).toLowerCase())return fail(res,400,'Enter a parent or guardian email different from your own.');}
+ const status=age<ADULT_AGE?'pending_guardian':'active';
+ await query('UPDATE users SET date_of_birth=$1,age_declared_at=COALESCE(age_declared_at,now()),terms_accepted_at=now(),terms_version=$2,account_status=$3,updated_at=now() WHERE id=$4',[dobToSave,TERMS_VERSION,status,req.user.sub]);
+ if(age<ADULT_AGE){const approval=await createGuardianRequest({userId:req.user.sub,childName:current.rows[0].name,kind:'account',guardianEmail:parsed.data.guardian_email});return res.status(202).json({guardian_pending:true,guardian_email_sent:approval.sent,message:'Your parent or guardian must approve the account before you can continue.'});}
+ res.json({saved:true,account_status:'active'});
+}));
 app.get('/api/v1/notifications/public-key',(_req,res)=>res.json({configured:pushReady(),publicKey:pushReady()?process.env.VAPID_PUBLIC_KEY:null}));
 app.post('/api/v1/notifications/subscriptions',auth,asyncRoute(async(req,res)=>{
  if(!pushReady())return fail(res,503,'Background push notifications are not configured yet');
@@ -159,24 +176,30 @@ app.post('/api/v1/auth/google',asyncRoute(async(req,res)=>{
  if(claims.aud!==clientId||(claims.email_verified!==true&&claims.email_verified!=='true')||!claims.email||!claims.sub)return fail(res,401,'Google account verification failed.');
  const email=String(claims.email).trim().toLowerCase();
  const displayName=String(claims.name||claims.given_name||email.split('@')[0]).trim().slice(0,120);
- let found=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,created_at FROM users WHERE email=$1',[email]);
- let user=found.rows[0];
+ const found=await query(`SELECT ${USER_COLUMNS} FROM users WHERE email=$1`,[email]);
+ let user=found.rows[0];let createdNew=false,consent=null;
+ if(user){const gate=accountGate(user.account_status);if(gate)return res.status(403).json({error:gate.message,code:gate.code,can_resend:true});}
  if(!user){
+  consent=validateSignupConsent(req.body,email);
+  if(!consent.ok){if(!req.body?.date_of_birth)return res.json({needs_age:true,name:displayName,terms_version:TERMS_VERSION});return res.status(400).json({error:consent.error,needs_guardian:Boolean(consent.needsGuardian)});}
+  if(consent.minor&&!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');
   const passwordHash=await bcrypt.hash(randomUUID()+randomUUID(),12);
   try{
-   const created=await query("INSERT INTO users(name,email,password_hash,class_level,subjects) VALUES($1,$2,$3,$4,$5) RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at",[displayName,email,passwordHash,'',[]]);
-   user=created.rows[0];
+   const created=await query(`INSERT INTO users(name,email,password_hash,class_level,subjects,date_of_birth,age_declared_at,terms_accepted_at,terms_version,account_status) VALUES($1,$2,$3,$4,$5,$6,now(),now(),$7,$8) RETURNING ${USER_COLUMNS}`,[displayName,email,passwordHash,'',[],consent.dob,TERMS_VERSION,consent.minor?'pending_guardian':'active']);
+   user=created.rows[0];createdNew=true;
    const referralCode=typeof req.body?.referral_code==='string'?req.body.referral_code.trim().slice(0,32):'';
    if(referralCode){const ref=await query('SELECT owner_user_id FROM referral_codes WHERE code=$1',[referralCode]);if(ref.rowCount&&ref.rows[0].owner_user_id!==user.id)await query('INSERT INTO referrals(referrer_user_id,referred_user_id,referral_code) VALUES($1,$2,$3) ON CONFLICT(referred_user_id) DO NOTHING',[ref.rows[0].owner_user_id,user.id,referralCode]);}
   }catch(error){
    if(error.code!=='23505')throw error;
-   found=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,created_at FROM users WHERE email=$1',[email]);
-   user=found.rows[0];
+   const again=await query(`SELECT ${USER_COLUMNS} FROM users WHERE email=$1`,[email]);
+   user=again.rows[0];
    if(!user)throw error;
+   const gate=accountGate(user.account_status);if(gate)return res.status(403).json({error:gate.message,code:gate.code,can_resend:true});
   }
  }
+ if(createdNew&&consent?.minor){const approval=await createGuardianRequest({userId:user.id,childName:user.name,kind:'account',guardianEmail:consent.guardianEmail});return res.status(202).json({guardian_pending:true,guardian_email_sent:approval.sent,user:publicUser(user),message:'Account created. Your parent or guardian must approve it before you can sign in.'});}
  const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});
- res.json({token,user,created:!found.rowCount});
+ res.json({token,user:publicUser(user),created:createdNew});
 }));
 app.post('/api/v1/auth/register/request-otp',emailOtpLimiter,asyncRoute(async(req,res)=>{
  if(!envReady())return fail(res,503,'Authentication is not configured');
@@ -184,12 +207,15 @@ app.post('/api/v1/auth/register/request-otp',emailOtpLimiter,asyncRoute(async(re
  const parsed=registration.safeParse(req.body);
  if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
  const data=parsed.data;const email=data.email.toLowerCase();
+ const consent=validateSignupConsent(data,email);
+ if(!consent.ok)return res.status(400).json({error:consent.error,needs_guardian:Boolean(consent.needsGuardian)});
+ if(consent.minor&&!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');
  const existing=await query('SELECT id FROM users WHERE email=$1',[email]);
  if(existing.rowCount)return fail(res,409,'An account with this email already exists. Sign in instead.');
  const otp=String(randomInt(0,1000000)).padStart(6,'0');
  const otpHash=createHash('sha256').update(email+':'+otp+':'+process.env.JWT_SECRET).digest('hex');
  const passwordHash=await bcrypt.hash(data.password,12);
- await query('INSERT INTO email_verification_codes(email,otp_hash,pending_data,expires_at,attempts) VALUES($1,$2,$3::jsonb,now()+interval \'10 minutes\',0) ON CONFLICT(email) DO UPDATE SET otp_hash=EXCLUDED.otp_hash,pending_data=EXCLUDED.pending_data,expires_at=EXCLUDED.expires_at,attempts=0,created_at=now()',[email,otpHash,JSON.stringify({name:data.name,email,class_level:data.class_level,subjects:normalizeSubjectList(data.subjects),password_hash:passwordHash,referral_code:data.referral_code})]);
+ await query('INSERT INTO email_verification_codes(email,otp_hash,pending_data,expires_at,attempts) VALUES($1,$2,$3::jsonb,now()+interval \'10 minutes\',0) ON CONFLICT(email) DO UPDATE SET otp_hash=EXCLUDED.otp_hash,pending_data=EXCLUDED.pending_data,expires_at=EXCLUDED.expires_at,attempts=0,created_at=now()',[email,otpHash,JSON.stringify({name:data.name,email,class_level:data.class_level,subjects:normalizeSubjectList(data.subjects),password_hash:passwordHash,referral_code:data.referral_code,date_of_birth:consent.dob,guardian_email:consent.guardianEmail,terms_version:TERMS_VERSION})]);
  let mail;
  try{
   mail=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.EMAIL_FROM,to:[email],subject:'Your GetLearny verification code',text:'Hello '+data.name+',\n\nYour GetLearny verification code is '+otp+'. It expires in 10 minutes. If you did not request this, you can ignore this email.\n\nGetLearny'}),signal:AbortSignal.timeout(10000)});
@@ -211,15 +237,34 @@ app.post('/api/v1/auth/register/verify-otp',emailOtpLimiter,asyncRoute(async(req
  if(submitted!==record.otp_hash){await query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE email=$1',[email]);return fail(res,400,'That verification code is incorrect. Check it and try again.')}
  const data=record.pending_data;
  try{
-  const created=await query('INSERT INTO users(name,email,password_hash,class_level,subjects) VALUES($1,$2,$3,$4,$5) RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at',[data.name,email,data.password_hash,data.class_level,normalizeSubjectList(data.subjects||[])]);
+  if(!data.date_of_birth||!data.terms_version){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,400,'Please create your account again so we can confirm your date of birth and terms acceptance.');}
+  const minor=ageOn(data.date_of_birth)<ADULT_AGE;
+  if(minor&&!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');
+  const created=await query(`INSERT INTO users(name,email,password_hash,class_level,subjects,date_of_birth,age_declared_at,terms_accepted_at,terms_version,account_status) VALUES($1,$2,$3,$4,$5,$6,now(),now(),$7,$8) RETURNING ${USER_COLUMNS}`,[data.name,email,data.password_hash,data.class_level,normalizeSubjectList(data.subjects||[]),data.date_of_birth,TERMS_VERSION,minor?'pending_guardian':'active']);
   if(data.referral_code){const ref=await query('SELECT owner_user_id FROM referral_codes WHERE code=$1',[data.referral_code]);if(ref.rowCount&&ref.rows[0].owner_user_id!==created.rows[0].id)await query('INSERT INTO referrals(referrer_user_id,referred_user_id,referral_code) VALUES($1,$2,$3) ON CONFLICT(referred_user_id) DO NOTHING',[ref.rows[0].owner_user_id,created.rows[0].id,data.referral_code]);}
   await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);
-  const user=created.rows[0];const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});
+  const user=created.rows[0];
+  if(minor){const approval=await createGuardianRequest({userId:user.id,childName:user.name,kind:'account',guardianEmail:data.guardian_email});return res.status(202).json({guardian_pending:true,guardian_email_sent:approval.sent,message:'Account created. Your parent or guardian must approve it before you can sign in.'});}
+  const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});
   res.status(201).json({token,user});
  }catch(error){if(error.code==='23505'){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,409,'An account with this email already exists. Sign in instead.')}throw error}
 }));
-app.post('/api/v1/auth/register',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=registration.safeParse(req.body);if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);const {name,email,password,class_level}=parsed.data;const subjects=normalizeSubjectList(parsed.data.subjects);const hash=await bcrypt.hash(password,12);try{const r=await query('INSERT INTO users(name,email,password_hash,class_level,subjects) VALUES($1,$2,$3,$4,$5) RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at',[name,email.toLowerCase(),hash,class_level,subjects]);const user=r.rows[0];const referralCode=parsed.data.referral_code;if(referralCode){const ref=await query('SELECT owner_user_id FROM referral_codes WHERE code=$1',[referralCode]);if(ref.rowCount&&ref.rows[0].owner_user_id!==user.id)await query('INSERT INTO referrals(referrer_user_id,referred_user_id,referral_code) VALUES($1,$2,$3) ON CONFLICT(referred_user_id) DO NOTHING',[ref.rows[0].owner_user_id,user.id,referralCode]);}const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.status(201).json({token,user})}catch(e){if(e.code==='23505')return fail(res,409,'An account with this email already exists');throw e}}));
-app.post('/api/v1/auth/login',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=login.safeParse(req.body);if(!parsed.success)return fail(res,400,'Enter a valid email and password');const r=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,password_hash,created_at FROM users WHERE email=$1',[parsed.data.email.toLowerCase()]);const user=r.rows[0];if(!user||!await bcrypt.compare(parsed.data.password,user.password_hash))return fail(res,401,'Email or password is incorrect');delete user.password_hash;const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.json({token,user})}));
+app.post('/api/v1/auth/register',asyncRoute(async(req,res)=>{
+ if(!envReady())return fail(res,503,'Authentication is not configured');
+ const parsed=registration.safeParse(req.body);if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
+ const data=parsed.data;const email=data.email.toLowerCase();const consent=validateSignupConsent(data,email);
+ if(!consent.ok)return res.status(400).json({error:consent.error,needs_guardian:Boolean(consent.needsGuardian)});
+ if(consent.minor&&!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');
+ const hash=await bcrypt.hash(data.password,12);
+ try{
+  const r=await query(`INSERT INTO users(name,email,password_hash,class_level,subjects,date_of_birth,age_declared_at,terms_accepted_at,terms_version,account_status) VALUES($1,$2,$3,$4,$5,$6,now(),now(),$7,$8) RETURNING ${USER_COLUMNS}`,[data.name,email,hash,data.class_level,normalizeSubjectList(data.subjects),consent.dob,TERMS_VERSION,consent.minor?'pending_guardian':'active']);
+  const user=r.rows[0];const referralCode=data.referral_code;
+  if(referralCode){const ref=await query('SELECT owner_user_id FROM referral_codes WHERE code=$1',[referralCode]);if(ref.rowCount&&ref.rows[0].owner_user_id!==user.id)await query('INSERT INTO referrals(referrer_user_id,referred_user_id,referral_code) VALUES($1,$2,$3) ON CONFLICT(referred_user_id) DO NOTHING',[ref.rows[0].owner_user_id,user.id,referralCode]);}
+  if(consent.minor){const approval=await createGuardianRequest({userId:user.id,childName:user.name,kind:'account',guardianEmail:consent.guardianEmail});return res.status(202).json({guardian_pending:true,guardian_email_sent:approval.sent,message:'Account created. Your parent or guardian must approve it before you can sign in.'});}
+  const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.status(201).json({token,user:publicUser(user)});
+ }catch(e){if(e.code==='23505')return fail(res,409,'An account with this email already exists');throw e}
+}));
+app.post('/api/v1/auth/login',asyncRoute(async(req,res)=>{if(!envReady())return fail(res,503,'Authentication is not configured');const parsed=login.safeParse(req.body);if(!parsed.success)return fail(res,400,'Enter a valid email and password');const r=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,password_hash,created_at,account_status FROM users WHERE email=$1',[parsed.data.email.toLowerCase()]);const user=r.rows[0];if(!user||!await bcrypt.compare(parsed.data.password,user.password_hash))return fail(res,401,'Email or password is incorrect');const gate=accountGate(user.account_status);if(gate)return res.status(403).json({error:gate.message,code:gate.code,can_resend:true});delete user.password_hash;const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});res.json({token,user})}));
 app.get('/api/v1/me',auth,asyncRoute(async(req,res)=>{const r=await query('SELECT id,name,email,role,avatar_data,class_level,subjects,created_at FROM users WHERE id=$1',[req.user.sub]);if(!r.rowCount)return fail(res,404,'Account not found');res.json({user:r.rows[0]})}));
 app.patch('/api/v1/me',auth,asyncRoute(async(req,res)=>{const parsed=z.object({class_level:z.string().trim().max(100).optional().default(''),subjects:z.array(z.string().trim().min(1).max(120)).max(40).optional().default([])}).safeParse(req.body);if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);const subjects=normalizeSubjectList(parsed.data.subjects);const r=await query('UPDATE users SET class_level=$1,subjects=$2,updated_at=now() WHERE id=$3 RETURNING id,name,email,role,avatar_data,class_level,subjects,created_at',[parsed.data.class_level,subjects,req.user.sub]);if(!r.rowCount)return fail(res,404,'Account not found');res.json({user:r.rows[0]})}));
 app.get('/api/v1/subjects',asyncRoute(async(_req,res)=>{const r=await query('SELECT s.id,s.name,s.code,s.description,count(t.id)::int AS topic_count FROM subjects s LEFT JOIN topics t ON t.subject_id=s.id GROUP BY s.id ORDER BY s.name');res.json({subjects:r.rows})}));
@@ -244,23 +289,9 @@ app.get('/api/v1/community/summary',auth,asyncRoute(async(req,res)=>{
   SELECT to_char((created_at AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS study_day FROM learning_logs WHERE user_id=$1 AND (status='completed' OR minutes_spent>0)
   UNION SELECT to_char((taken_at AT TIME ZONE 'UTC')::date,'YYYY-MM-DD') AS study_day FROM test_logs WHERE user_id=$1
  ) activity ORDER BY study_day DESC LIMIT 400`,[req.user.sub]);
- // PostgreSQL date values can arrive as Date objects depending on driver configuration.
- // Keep the streak algorithm operating only on validated YYYY-MM-DD strings.
- const days=result.rows.map(row=>{
-  const value=row.study_day instanceof Date
-   ? (Number.isNaN(row.study_day.getTime())?'':row.study_day.toISOString().slice(0,10))
-   : String(row.study_day??'').slice(0,10);
-  return /^\\d{4}-\\d{2}-\\d{2}$/.test(value)?value:'';
- }).filter(Boolean);
- const today=new Date().toISOString().slice(0,10),yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
- let current=0,check=days.includes(today)?today:days.includes(yesterday)?yesterday:null;
- if(check){for(const day of days){if(day!==check)break;current++;const d=new Date(check+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-1);check=d.toISOString().slice(0,10);}}
- let longest=0,run=0,previous=null;for(const day of [...days].sort()){if(previous){const d=new Date(previous+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+1);run=day===d.toISOString().slice(0,10)?run+1:1}else run=1;longest=Math.max(longest,run);previous=day;}
- // Referral qualification requires recorded study activity, not just a sign-in.
- const hasStudyActivity=days.length>0;
- if(hasStudyActivity)await query('UPDATE referrals SET qualified_at=COALESCE(qualified_at,now()) WHERE referred_user_id=$1',[req.user.sub]);
- const referrals=await query('SELECT count(*)::int AS invited,count(*) FILTER(WHERE qualified_at IS NOT NULL)::int AS qualified FROM referrals WHERE referrer_user_id=$1',[req.user.sub]);
- res.json({streak:{current,longest,activeDays:days.length,lastStudyDay:days[0]||null},referral:referrals.rows[0],invite:{url:process.env.APP_URL||'https://getlearny.vercel.app',code:referral.rows[0].code}});
+ const days=normalizeStudyDays(result.rows);
+ const streak=computeStreak(days);
+ res.json({referralCode:referral.rows[0].code,streak:streak.current,longestStreak:streak.longest,activeDays:streak.activeDays,lastStudyDay:streak.lastStudyDay});
 }));
 app.get('/api/v1/dashboard',auth,asyncRoute(async(req,res)=>{const [logs,tests,journal]=await Promise.all([query("SELECT count(*) FILTER(WHERE status='completed')::int AS completed_topics,coalesce(sum(minutes_spent),0)::int AS minutes_studied FROM learning_logs WHERE user_id=$1",[req.user.sub]),query('SELECT count(*)::int AS tests,coalesce(round(avg(score/max_score*100),1),0) AS average_percent FROM test_logs WHERE user_id=$1',[req.user.sub]),query('SELECT count(*)::int AS journal_entries FROM journal_entries WHERE user_id=$1',[req.user.sub])]);res.json({progress:{completedTopics:logs.rows[0].completed_topics,minutesStudied:logs.rows[0].minutes_studied},tests:tests.rows[0],journal:journal.rows[0]})}));
 app.post('/api/v1/learning-logs',auth,asyncRoute(async(req,res)=>{const s=z.object({subject:z.string().min(1).max(100),topic:z.string().min(1).max(200),minutes_spent:z.number().int().min(0).max(1440).default(0),status:z.enum(['started','completed','review']).default('started'),notes:z.string().max(5000).default('')}).safeParse(req.body);if(!s.success)return fail(res,400,s.error.issues[0].message);const d=s.data;const r=await query('INSERT INTO learning_logs(user_id,subject,topic,minutes_spent,status,notes) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[req.user.sub,d.subject,d.topic,d.minutes_spent,d.status,d.notes]);if(d.status==='completed'||d.minutes_spent>0)await query('UPDATE referrals SET qualified_at=COALESCE(qualified_at,now()) WHERE referred_user_id=$1',[req.user.sub]);res.status(201).json({log:r.rows[0]})}));
