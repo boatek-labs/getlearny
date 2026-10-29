@@ -98,7 +98,7 @@ export function registerConsentRoutes(app, { asyncRoute, authAny, fail }) {
     }
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const result = await query(
-      "UPDATE guardian_requests SET status=$1,decided_at=now() WHERE token_hash=$2 AND status='pending' AND expires_at>now() RETURNING user_id,kind",
+      "UPDATE guardian_requests SET status=$1,decided_at=now() WHERE token_hash=$2 AND status='pending' AND expires_at>now() RETURNING id,user_id,kind",
       [decision === 'approve' ? 'approved' : 'declined', tokenHash]
     );
     if (!result.rowCount) return fail(res, 410, 'This approval link has expired or has already been used.');
@@ -108,7 +108,7 @@ export function registerConsentRoutes(app, { asyncRoute, authAny, fail }) {
     } else {
       await query(
         "INSERT INTO location_consents(user_id,status,source,agreement_version,granted_at,withdrawn_at,guardian_request_id,updated_at) VALUES($1,$2,'guardian',$3,CASE WHEN $2='granted' THEN now() ELSE NULL END,CASE WHEN $2='withdrawn' THEN now() ELSE NULL END,$4,now()) ON CONFLICT(user_id) DO UPDATE SET status=EXCLUDED.status,source='guardian',agreement_version=EXCLUDED.agreement_version,granted_at=EXCLUDED.granted_at,withdrawn_at=EXCLUDED.withdrawn_at,guardian_request_id=EXCLUDED.guardian_request_id,updated_at=now()",
-        [userId, decision === 'approve' ? 'granted' : 'withdrawn', LOCATION_CONSENT_VERSION, result.rows[0].id || null]
+        [userId, decision === 'approve' ? 'granted' : 'withdrawn', LOCATION_CONSENT_VERSION, result.rows[0].id]
       );
     }
     res.json({ saved: true, decision });
@@ -122,10 +122,16 @@ export function registerConsentRoutes(app, { asyncRoute, authAny, fail }) {
   app.put('/api/v1/me/consents/location', authAny, asyncRoute(async (req, res) => {
     const choice = req.body?.consent;
     if (!['granted', 'withdrawn'].includes(choice)) return fail(res, 400, 'Choose whether to grant or withdraw location consent.');
-    const user = await query('SELECT date_of_birth FROM users WHERE id=$1', [req.user.sub]);
+    const user = await query('SELECT id,name,email,date_of_birth FROM users WHERE id=$1', [req.user.sub]);
     if (!user.rowCount || !user.rows[0].date_of_birth) return fail(res, 403, 'Confirm your date of birth before changing consent settings.');
     const age = ageOn(String(user.rows[0].date_of_birth).slice(0, 10));
-    if (age < ADULT_AGE) return fail(res, 403, 'A parent or guardian must approve location consent for learners under 18.');
+    if (age < ADULT_AGE && choice === 'granted') {
+      const guardianEmail = String(req.body?.guardian_email || '').trim().toLowerCase();
+      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(guardianEmail) || guardianEmail === String(user.rows[0].email).toLowerCase()) return fail(res, 400, 'Enter a valid parent or guardian email different from your own.');
+      if (!guardianEmailReady()) return fail(res, 503, 'Parent approval emails are not configured yet. Please try again later.');
+      const approval = await createGuardianRequest({ userId: req.user.sub, childName: user.rows[0].name, kind: 'location', guardianEmail });
+      return res.status(202).json({ saved: false, guardian_pending: true, guardian_email_sent: approval.sent, message: 'Location consent is pending parent or guardian approval. No location data is collected by this version of GetLearny.' });
+    }
     await query(
       "INSERT INTO location_consents(user_id,status,source,agreement_version,granted_at,withdrawn_at,updated_at) VALUES($1,$2,'self',$3,CASE WHEN $2='granted' THEN now() ELSE NULL END,CASE WHEN $2='withdrawn' THEN now() ELSE NULL END,now()) ON CONFLICT(user_id) DO UPDATE SET status=EXCLUDED.status,source='self',agreement_version=EXCLUDED.agreement_version,granted_at=EXCLUDED.granted_at,withdrawn_at=EXCLUDED.withdrawn_at,updated_at=now()",
       [req.user.sub, choice, LOCATION_CONSENT_VERSION]
