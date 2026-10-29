@@ -97,3 +97,13 @@ GEMINI_FALLBACK_MODELS=gemini-3.6-flash,gemini-3.5-flash-lite
 ```
 
 The Gemini API key must only be read by the server. Never place it in browser JavaScript or Flutter app configuration. Check Google's official Gemini API model documentation for supported model IDs and availability.
+
+
+### Age checks and parent/guardian approval
+
+- New accounts must declare a valid date of birth (minimum age 10) and accept the current Terms of Use and Privacy Notice.
+- Learners under 18 remain locked until a parent or guardian approves through the emailed link at `/guardian.html`.
+- Configure `RESEND_API_KEY`, `EMAIL_FROM`, and `APP_URL` in the API production environment. `APP_URL` must be the public HTTPS site URL without a trailing slash.
+- Existing accounts are prompted to declare their date of birth and accept the current terms when they next use the web app.
+- Study Buddy location consent is stored separately; this version does not collect location data.
+- Database-backed tests should use a dedicated `TEST_DATABASE_URL`; never point test runs at production.
