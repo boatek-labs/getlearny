@@ -11,6 +11,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import webPush from 'web-push';
+import { sendEmail, emailConfigured } from './mailer.js';
 import pdfParse from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
 import { query, health } from './db.js';
@@ -203,7 +204,7 @@ app.post('/api/v1/auth/google',asyncRoute(async(req,res)=>{
 }));
 app.post('/api/v1/auth/register/request-otp',emailOtpLimiter,asyncRoute(async(req,res)=>{
  if(!envReady())return fail(res,503,'Authentication is not configured');
- if(!process.env.RESEND_API_KEY||!process.env.EMAIL_FROM)return fail(res,503,'Email verification is not configured. Add RESEND_API_KEY and EMAIL_FROM in Vercel, then redeploy.');
+ if(!emailConfigured())return fail(res,503,'Email verification is not configured. Add SMTP_USER, SMTP_PASS and EMAIL_FROM in Vercel, then redeploy.');
  const parsed=registration.safeParse(req.body);
  if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
  const data=parsed.data;const email=data.email.toLowerCase();
@@ -216,11 +217,9 @@ app.post('/api/v1/auth/register/request-otp',emailOtpLimiter,asyncRoute(async(re
  const otpHash=createHash('sha256').update(email+':'+otp+':'+process.env.JWT_SECRET).digest('hex');
  const passwordHash=await bcrypt.hash(data.password,12);
  await query('INSERT INTO email_verification_codes(email,otp_hash,pending_data,expires_at,attempts) VALUES($1,$2,$3::jsonb,now()+interval \'10 minutes\',0) ON CONFLICT(email) DO UPDATE SET otp_hash=EXCLUDED.otp_hash,pending_data=EXCLUDED.pending_data,expires_at=EXCLUDED.expires_at,attempts=0,created_at=now()',[email,otpHash,JSON.stringify({name:data.name,email,class_level:data.class_level,subjects:normalizeSubjectList(data.subjects),password_hash:passwordHash,referral_code:data.referral_code,date_of_birth:consent.dob,guardian_email:consent.guardianEmail,terms_version:TERMS_VERSION})]);
- let mail;
  try{
-  mail=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.EMAIL_FROM,to:[email],subject:'Your GetLearny verification code',text:'Hello '+data.name+',\n\nYour GetLearny verification code is '+otp+'. It expires in 10 minutes. If you did not request this, you can ignore this email.\n\nGetLearny'}),signal:AbortSignal.timeout(10000)});
- }catch{return fail(res,502,'The verification email could not be sent because the email service timed out. Please try again.')}
- if(!mail.ok){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,502,'The verification email could not be sent. Check the email service configuration and try again.')}
+  await sendEmail({to:email,subject:'Your GetLearny verification code',text:'Hello '+data.name+',\n\nYour GetLearny verification code is '+otp+'. It expires in 10 minutes. If you did not request this, you can ignore this email.\n\nGetLearny'});
+ }catch(error){console.error('Verification email failed:',error?.message||'SMTP error');await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,502,'The verification email could not be sent. Check SMTP_USER, SMTP_PASS and EMAIL_FROM, then try again.')}
  res.status(202).json({message:'Verification code sent. Check your inbox and spam folder.',email,expiresInSeconds:600});
 }));
 app.post('/api/v1/auth/register/verify-otp',emailOtpLimiter,asyncRoute(async(req,res)=>{
