@@ -113,7 +113,7 @@ function markdownLite(input){
   if(/^([-*_])(?:\s*\1){2,}$/.test(line)){flushParagraph();closeList();out.push('<hr>');continue;}
   if((match=line.match(/^>\s?(.*)$/))){flushParagraph();closeList();out.push('<blockquote>'+inline(match[1])+'</blockquote>');continue;}
   if((match=line.match(/^\s*[-*+]\s+(.+)$/))){flushParagraph();if(list!=='ul'){closeList();list='ul';out.push('<ul>');}out.push('<li>'+inline(match[1])+'</li>');continue;}
-  if((match=line.match(/^\s*\d+[.)]\s+(.+)$/))){flushParagraph();if(list!=='ol'){closeList();list='ol';}out.push('<ol>');out.push('<li>'+inline(match[1])+'</li>');continue;}
+  if((match=line.match(/^\s*\d+[.)]\s+(.+)$/))){flushParagraph();if(list!=='ol'){closeList();list='ol';out.push('<ol>');}out.push('<li>'+inline(match[1])+'</li>');continue;}
   closeList();paragraph.push(line);
  }
  flushParagraph();closeList();
