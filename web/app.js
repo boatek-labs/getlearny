@@ -52,7 +52,6 @@ function getLearnerSubjects(){
   const matches=[...value.matchAll(known)];
   const compact=value.toLocaleLowerCase('en').replace(/[\s,;|]+/g,'');
   const recovered=matches.map(match=>match[0].toLocaleLowerCase('en').replace(/\s+/g,'')).join('');
-  // Split only when the full value is made from the known subject labels.
   if(matches.length&&recovered===compact)candidates.push(...matches.map(match=>labels[match[0].replace(/\s+/g,' ').toLowerCase()]||match[0]));
   else candidates.push(...value.split(/[;,|\n]+/).map(item=>item.trim()).filter(Boolean));
  }
