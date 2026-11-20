@@ -77,7 +77,7 @@ function selectSubject(name){
 }
 async function renderTopicCatalog(s,panel){const target=panel.querySelector('#topic-catalog');try{const r=await api(`/topics?subject=${encodeURIComponent(s.code)}&limit=100`);const topics=r.topics||[];if(!topics.length)throw new Error('No published topics are available for this subject yet.');target.innerHTML=`<div class="catalog-heading"><b>Topic catalogue</b><span>${topics.length} topics</span></div><div class="topic-choice-list">${topics.map(t=>`<button type="button" class="topic-choice ${t.title===state.selectedTopic?'selected':''}" data-topic="${esc(t.title)}"><span><b>${esc(t.title)}</b><small>${esc(t.description||'Select to study this topic')}</small></span><span aria-hidden="true">→</span></button>`).join('')}</div>`;target.querySelectorAll('[data-topic]').forEach(button=>button.addEventListener('click',()=>{state.selectedTopic=button.dataset.topic;panel.querySelector('#selected-topic-heading').textContent=`${s.name}: ${state.selectedTopic}`;target.querySelectorAll('[data-topic]').forEach(item=>item.classList.toggle('selected',item===button));panel.querySelector('#lesson-content').innerHTML=''}))}catch(error){target.innerHTML=`<div class="record"><h3>Topic catalogue unavailable</h3><p>${esc(error.message)}</p><p>GetLearny will not invent topics. Reconnect and retry to load the published catalogue.</p><button type="button" class="button button-light" id="retry-topic-catalog">Retry catalogue</button></div>`;target.querySelector('#retry-topic-catalog').addEventListener('click',()=>renderTopicCatalog(s,panel))}}
 function markdownLite(input){
- // Convert Markdown into a small, safe HTML subset for tutor and lesson output.
+ // Render a safe Markdown subset with readable structure for tutor and lesson answers.
  const tick=String.fromCharCode(96), fence=tick.repeat(3), codeBlocks=[];
  const raw=String(input??'').replace(/\r\n?/g,'\n');
  const fencePattern=new RegExp(fence+'([^\\n]*)\\n([\\s\\S]*?)\\n?'+fence,'g');
@@ -86,7 +86,6 @@ function markdownLite(input){
   codeBlocks.push('<pre class="tutor-code"><code>'+esc(code.trim())+'</code></pre>');
   return '\n%%CODE_BLOCK_'+id+'%%\n';
  });
- // Escape all model-provided markup before adding our own trusted tags.
  text=esc(text);
  const cleanMath=value=>String(value)
   .replace(/\\(?:text|mathrm|mathbf)\s*\{([^}]*)\}/g,'$1')
@@ -115,7 +114,7 @@ function markdownLite(input){
   if(/^([-*_])(?:\s*\1){2,}$/.test(line)){flushParagraph();closeList();out.push('<hr>');continue;}
   if((match=line.match(/^>\s?(.*)$/))){flushParagraph();closeList();out.push('<blockquote>'+inline(match[1])+'</blockquote>');continue;}
   if((match=line.match(/^\s*[-*+]\s+(.+)$/))){flushParagraph();if(list!=='ul'){closeList();list='ul';out.push('<ul>');}out.push('<li>'+inline(match[1])+'</li>');continue;}
-  if((match=line.match(/^\s*\d+[.)]\s+(.+)$/))){flushParagraph();if(list!=='ol'){closeList();list='ol';out.push('<ol>');}out.push('<li>'+inline(match[1])+'</li>');continue;}
+  if((match=line.match(/^\s*\d+[.)]\s+(.+)$/))){flushParagraph();if(list!=='ol'){closeList();list='ol';}out.push('<ol>');out.push('<li>'+inline(match[1])+'</li>');continue;}
   closeList();paragraph.push(line);
  }
  flushParagraph();closeList();
