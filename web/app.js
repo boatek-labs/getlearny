@@ -60,38 +60,49 @@ function selectSubject(name){
 }
 async function renderTopicCatalog(s,panel){const target=panel.querySelector('#topic-catalog');try{const r=await api(`/topics?subject=${encodeURIComponent(s.code)}&limit=100`);const topics=r.topics||[];if(!topics.length)throw new Error('No published topics are available for this subject yet.');target.innerHTML=`<div class="catalog-heading"><b>Topic catalogue</b><span>${topics.length} topics</span></div><div class="topic-choice-list">${topics.map(t=>`<button type="button" class="topic-choice ${t.title===state.selectedTopic?'selected':''}" data-topic="${esc(t.title)}"><span><b>${esc(t.title)}</b><small>${esc(t.description||'Select to study this topic')}</small></span><span aria-hidden="true">→</span></button>`).join('')}</div>`;target.querySelectorAll('[data-topic]').forEach(button=>button.addEventListener('click',()=>{state.selectedTopic=button.dataset.topic;panel.querySelector('#selected-topic-heading').textContent=`${s.name}: ${state.selectedTopic}`;target.querySelectorAll('[data-topic]').forEach(item=>item.classList.toggle('selected',item===button));panel.querySelector('#lesson-content').innerHTML=''}))}catch(error){target.innerHTML=`<div class="record"><h3>Topic catalogue unavailable</h3><p>${esc(error.message)}</p><p>GetLearny will not invent topics. Reconnect and retry to load the published catalogue.</p><button type="button" class="button button-light" id="retry-topic-catalog">Retry catalogue</button></div>`;target.querySelector('#retry-topic-catalog').addEventListener('click',()=>renderTopicCatalog(s,panel))}}
 function markdownLite(input){
- // Render model Markdown as safe, readable HTML. Escape source text before adding
- // our own tags so tutor output can never inject arbitrary markup or scripts.
- const source=String(input??'').replace(/<u>([\\s\\S]*?)<\\/(?:u)?\\s*>/gi,(_,inner)=>'%%UNDERLINE_OPEN%%'+inner+'%%UNDERLINE_CLOSE%%');
- let text=esc(source).replace(/%%UNDERLINE_OPEN%%/g,'<u>').replace(/%%UNDERLINE_CLOSE%%/g,'</u>');
- const codeBlocks=[];
- text=text.replace(/```([a-zA-Z0-9_-]*)\\n?([\\s\\S]*?)```/g,(_,lang,code)=>{const id=codeBlocks.length;codeBlocks.push('<pre class="tutor-code"><code>'+code.trim().replace(/\\n/g,'<br>')+'</code></pre>');return '%%CODE_BLOCK_'+id+'%%';});
- const cleanMath=value=>String(value).replace(/\\\\(?:text|mathrm|mathbf)\\s*\\{([^}]*)\\}/g,'$1').replace(/\\\\frac\\s*\\{([^}]*)\\}\\s*\\{([^}]*)\\}/g,'($1)/($2)').replace(/\\\\sqrt\\s*\\{([^}]*)\\}/g,'√($1)').replace(/\\\\times/g,'×').replace(/\\\\div/g,'÷').replace(/\\\\pm/g,'±').replace(/\\\\rightarrow/g,'→').replace(/\\\\cdot/g,'·').replace(/\\\\,/g,' ').replace(/[{}]/g,'');
- text=text.replace(/\\$\\$([\\s\\S]*?)\\$\\$/g,(_,math)=>'<div class="tutor-math">'+esc(cleanMath(math))+'</div>');
- text=text.replace(/\\$([^\\n$]+)\\$/g,(_,math)=>'<span class="tutor-math-inline">'+esc(cleanMath(math))+'</span>');
+ // Convert Markdown into a small, safe HTML subset for tutor and lesson output.
+ const tick=String.fromCharCode(96), fence=tick.repeat(3), codeBlocks=[];
+ const raw=String(input??'').replace(/\r\n?/g,'\n');
+ const fencePattern=new RegExp(fence+'([^\\n]*)\\n([\\s\\S]*?)\\n?'+fence,'g');
+ let text=raw.replace(fencePattern,(_,language,code)=>{
+  const id=codeBlocks.length;
+  codeBlocks.push('<pre class="tutor-code"><code>'+esc(code.trim())+'</code></pre>');
+  return '\n%%CODE_BLOCK_'+id+'%%\n';
+ });
+ // Escape all model-provided markup before adding our own trusted tags.
+ text=esc(text);
+ const cleanMath=value=>String(value)
+  .replace(/\\(?:text|mathrm|mathbf)\s*\{([^}]*)\}/g,'$1')
+  .replace(/\\frac\s*\{([^}]*)\}\s*\{([^}]*)\}/g,'($1)/($2)')
+  .replace(/\\sqrt\s*\{([^}]*)\}/g,'√($1)')
+  .replace(/\\times/g,'×').replace(/\\div/g,'÷').replace(/\\pm/g,'±')
+  .replace(/\\rightarrow/g,'→').replace(/\\cdot/g,'·').replace(/\\,/g,' ')
+  .replace(/[{}]/g,'');
+ text=text.replace(/\$\$([\s\S]*?)\$\$/g,(_,math)=>'<div class="tutor-math">'+esc(cleanMath(math))+'</div>');
+ text=text.replace(/\$([^\n$]+)\$/g,(_,math)=>'<span class="tutor-math-inline">'+esc(cleanMath(math))+'</span>');
  const inline=value=>value
-  .replace(/\\*\\*(.+?)\\*\\*/g,'<strong>$1</strong>')
-  .replace(/(?<!\\*)\\*([^*\\n]+)\\*(?!\\*)/g,'<em>$1</em>')
+  .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+  .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g,'<em>$1</em>')
   .replace(/~~(.+?)~~/g,'<del>$1</del>')
-  .replace(/`([^`]+)`/g,'<code>$1</code>');
- const lines=text.replace(/\\r/g,'').split('\\n'),out=[];
+  .replace(new RegExp(tick+'([^'+tick+']+)'+tick,'g'),'<code>$1</code>');
+ const lines=text.split('\n'),out=[];
  let list=null,paragraph=[];
  const closeList=()=>{if(list){out.push(list==='ol'?'</ol>':'</ul>');list=null;}};
  const flushParagraph=()=>{if(paragraph.length){out.push('<p>'+inline(paragraph.join(' '))+'</p>');paragraph=[];}};
- for(const raw of lines){
-  const line=raw.trim();
+ for(const rawLine of lines){
+  const line=rawLine.trim();
   if(!line){flushParagraph();closeList();continue;}
-  if(/^%%CODE_BLOCK_\\d+%%$/.test(line)){flushParagraph();closeList();out.push(line);continue;}
-  let m;
-  if((m=line.match(/^(#{1,6})\\s+(.+)$/))){flushParagraph();closeList();const level=Math.min(m[1].length+1,4);out.push('<h'+level+'>'+inline(m[2])+'</h'+level+'>');continue;}
-  if(/^([-*_])(?:\\s*\\1){2,}$/.test(line)){flushParagraph();closeList();out.push('<hr>');continue;}
-  if((m=line.match(/^>\\s?(.*)$/))){flushParagraph();closeList();out.push('<blockquote>'+inline(m[1])+'</blockquote>');continue;}
-  if((m=line.match(/^\\s*[-*+]\\s+(.+)$/))){flushParagraph();if(list!=='ul'){closeList();list='ul';out.push('<ul>');}out.push('<li>'+inline(m[1])+'</li>');continue;}
-  if((m=line.match(/^\\s*\\d+[.)]\\s+(.+)$/))){flushParagraph();if(list!=='ol'){closeList();list='ol';out.push('<ol>');}out.push('<li>'+inline(m[1])+'</li>');continue;}
+  if(/^%%CODE_BLOCK_\d+%%$/.test(line)){flushParagraph();closeList();out.push(line);continue;}
+  let match;
+  if((match=line.match(/^(#{1,6})\s+(.+)$/))){flushParagraph();closeList();const level=Math.min(match[1].length+1,4);out.push('<h'+level+'>'+inline(match[2])+'</h'+level+'>');continue;}
+  if(/^([-*_])(?:\s*\1){2,}$/.test(line)){flushParagraph();closeList();out.push('<hr>');continue;}
+  if((match=line.match(/^>\s?(.*)$/))){flushParagraph();closeList();out.push('<blockquote>'+inline(match[1])+'</blockquote>');continue;}
+  if((match=line.match(/^\s*[-*+]\s+(.+)$/))){flushParagraph();if(list!=='ul'){closeList();list='ul';out.push('<ul>');}out.push('<li>'+inline(match[1])+'</li>');continue;}
+  if((match=line.match(/^\s*\d+[.)]\s+(.+)$/))){flushParagraph();if(list!=='ol'){closeList();list='ol';out.push('<ol>');}out.push('<li>'+inline(match[1])+'</li>');continue;}
   closeList();paragraph.push(line);
  }
  flushParagraph();closeList();
- return out.join('').replace(/%%CODE_BLOCK_(\\d+)%%/g,(_,id)=>codeBlocks[Number(id)]||'');
+ return out.join('').replace(/%%CODE_BLOCK_(\d+)%%/g,(_,id)=>codeBlocks[Number(id)]||'');
 }
 async function generateLesson(s){const topic=state.selectedTopic||s.topic;const target=$('#lesson-content');if(!state.token){target.innerHTML='<div class="lesson-panel"><h3>Sign in to generate your lesson</h3><p>Connect your account to use the live lesson service and save your progress across devices.</p><button class="button button-primary" id="lesson-sign-in">Open account →</button></div>';$('#lesson-sign-in').onclick=()=>location.assign('/?auth=login');return}target.innerHTML='<p>Preparing your lesson…</p>';try{const r=await api('/lessons/generate',{method:'POST',body:JSON.stringify({subject:s.name,topic,level:state.user?.class_level||'Not specified',exam:'General'})});target.innerHTML=`<div class="lesson-panel">${markdownLite(r.lesson)}</div>`}catch(e){target.innerHTML='<div class="lesson-panel"><h3>Lesson unavailable</h3><p>'+esc(e.message)+'</p><p>Check GEMINI_API_KEY, GEMINI_MODEL and Gemini API access in the API deployment. No sample lesson was substituted.</p></div>'}}
 
