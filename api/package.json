@@ -11,7 +11,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "check": "node --check src/server.js && node --check src/app.js && node --check src/db.js",
-    "test": "node --test",
+    "test": "node --test ../tests/api/*.test.js",
     "db:migrate": "node src/migrate.js",
     "build": "node --check src/server.js && node --check src/app.js && node --check src/db.js"
   },
