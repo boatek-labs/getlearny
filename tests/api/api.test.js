@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import app from '../src/app.js';
+import app from '../../api/src/app.js';
 import { createServer } from 'node:http';
 
 async function withServer(fn){const server=createServer(app);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url=`http://127.0.0.1:${server.address().port}`;try{await fn(url)}finally{await new Promise(resolve=>server.close(resolve))}}

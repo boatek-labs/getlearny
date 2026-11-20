@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateWithGemini } from '../src/app.js';
+import { generateWithGemini } from '../../api/src/app.js';
 
 const originalFetch = globalThis.fetch;
 const originalEnv = {

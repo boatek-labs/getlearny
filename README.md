@@ -71,19 +71,27 @@ In the Android app, open a subject while online and choose **Download next 3 les
 - Responsive browser app and Flutter client using the hosted API by default
 
 ## Production checklist
-Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Browser email verification requires a Resend API key and a sender address on a verified domain; Google OAuth, password reset, background web push, and stable Android release signing still require their real provider credentials/configuration. Image OCR is local via Tesseract; scanned-PDF OCR uses Gemini where supported.
+Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Browser email verification requires Gmail SMTP credentials (a Google App Password) and a sender address; Google OAuth, password reset, background web push, and stable Android release signing still require their real provider credentials/configuration. Image OCR is local via Tesseract; scanned-PDF OCR uses Gemini where supported.
 
 
-### Email verification for browser signup
+### Email verification and guardian approvals (Gmail SMTP)
 
-The browser signup flow sends a six-digit code through Resend before creating the account. Codes expire after 10 minutes, are stored as hashes, and are limited to five verification requests/attempts per 15-minute window. Configure these API environment variables in Vercel and in `api/.env` for local development:
+Browser signup sends a six-digit verification code through Gmail SMTP before creating the account. Parent/guardian approval emails use the same mailer. Codes expire after 10 minutes and are stored as hashes.
+
+Configure these API environment variables in Vercel and in `api/.env` for local development:
 
 ```dotenv
-RESEND_API_KEY=re_your_resend_api_key
-EMAIL_FROM=GetLearny <verify@your-verified-domain.com>
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your-getlearny-gmail@gmail.com
+SMTP_PASS=your-16-character-Google-App-Password
+EMAIL_FROM=GetLearny <your-getlearny-gmail@gmail.com>
+APP_URL=https://your-getlearny-site.example
 ```
 
-Verify the sender domain in Resend before sending to real learners. Keep the API key server-side; never add it to browser JavaScript or Flutter configuration. If the variables are missing, signup displays a configuration error rather than pretending an email was sent.
+For Gmail, enable 2-Step Verification on the sending Google account and create a Google **App Password**. Use that 16-character App Password for `SMTP_PASS`, not your normal Gmail password. Keep these values only in the server/API environment; never put them in browser JavaScript or Flutter configuration. If mail credentials are missing or incorrect, verification and guardian email sending will fail with a visible error.
+
 
 ## Gemini AI environment template
 
@@ -97,3 +105,13 @@ GEMINI_FALLBACK_MODELS=gemini-3.6-flash,gemini-3.5-flash-lite
 ```
 
 The Gemini API key must only be read by the server. Never place it in browser JavaScript or Flutter app configuration. Check Google's official Gemini API model documentation for supported model IDs and availability.
+
+
+### Age checks and parent/guardian approval
+
+- New accounts must declare a valid date of birth (minimum age 10) and accept the current Terms of Use and Privacy Notice.
+- Learners under 18 remain locked until a parent or guardian approves through the emailed link at `/guardian.html`.
+- Configure `SMTP_USER and SMTP_PASS`, `EMAIL_FROM`, and `APP_URL` in the API production environment. `APP_URL` must be the public HTTPS site URL without a trailing slash.
+- Existing accounts are prompted to declare their date of birth and accept the current terms when they next use the web app.
+- Study Buddy location consent is stored separately; this version does not collect location data.
+- Database-backed tests should use a dedicated `TEST_DATABASE_URL`; never point test runs at production.

@@ -11,7 +11,7 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "check": "node --check src/server.js && node --check src/app.js && node --check src/db.js",
-    "test": "node --test",
+    "test": "node --test ../tests/api/*.test.js",
     "db:migrate": "node src/migrate.js",
     "build": "node --check src/server.js && node --check src/app.js && node --check src/db.js"
   },
@@ -29,7 +29,8 @@
     "zod": "^3.23.8",
     "web-push": "^3.6.7",
     "pdf-parse": "^1.1.1",
-    "tesseract.js": "^6.0.1"
+    "tesseract.js": "^6.0.1",
+    "nodemailer": "^6.9.16"
   },
   "devDependencies": {
     "jsdom": "^26.1.0"

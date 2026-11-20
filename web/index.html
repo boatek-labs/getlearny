@@ -78,6 +78,9 @@
 <label id="landing-name-wrap" class="auth-field" hidden>Full name<input name="name" minlength="2" maxlength="120" autocomplete="name" placeholder="Your name"></label>
 <label id="landing-level-wrap" class="auth-field" hidden>Study level <span class="auth-optional">Optional</span><input name="class_level" maxlength="100" placeholder="e.g. high school, university, self-study"></label>
 <label id="landing-subjects-wrap" class="auth-field" hidden>Subjects <span class="auth-optional">Optional</span><input name="subjects" maxlength="1000" placeholder="Mathematics, Biology, History…"><small>Separate subjects with commas. You can change these later.</small></label>
+<label id="landing-dob-wrap" class="auth-field" hidden>Date of birth<input name="date_of_birth" type="date" autocomplete="bday" max="2026-10-29"><small>Enter your real date of birth.</small></label>
+<label id="landing-guardian-wrap" class="auth-field" hidden>Parent or guardian email<input name="guardian_email" type="email" autocomplete="email" maxlength="254" placeholder="parent@example.com"><small>Required for learners under 18.</small></label>
+<label id="landing-terms-wrap" class="auth-consent" hidden><input name="accept_terms" type="checkbox"><span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms of Use</a> and have read the <a href="/privacy.html" target="_blank" rel="noopener">Privacy Notice</a>.</span></label>
 <label class="auth-field">Email address<input name="email" type="email" required autocomplete="email" inputmode="email" maxlength="254" placeholder="you@example.com"></label>
 <label class="auth-field">Password<input name="password" type="password" required minlength="8" maxlength="128" autocomplete="current-password" placeholder="At least 8 characters"></label>
 <label id="landing-otp-wrap" class="auth-field" hidden>Email verification code<input name="verification_code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="6-digit code"><small>Enter the code sent to your email.</small></label>
@@ -88,6 +91,6 @@
 <p class="auth-legal">Your account keeps your study progress and materials connected across devices.</p>
 </form></div></section>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="/auth.js?v=20261024-1" defer></script>
+<script src="/auth.js?v=20261029-consent1" defer></script>
 <script src="/landing.js?v=20261024-auth1" defer></script>
 </body></html>
