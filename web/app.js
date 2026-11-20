@@ -37,17 +37,34 @@ async function api(path,opts={}) {
  }
 }
 function showView(view){state.view=view;$$('.view').forEach(el=>el.classList.toggle('active',el.id===`view-${view}`));$$('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.view===view));$('#crumb').textContent=({home:'Overview',subjects:'My subjects',tutor:'AI tutor',practice:'Practice',journal:'Learning journal',tests:'Test tracker',documents:'Study files',notifications:'Notifications',profile:'Account'})[view]||view;window.scrollTo({top:0,behavior:'smooth'});if(view==='practice')renderQuiz();if(view==='profile')fillProfile();if(view==='subjects')renderSubjects();if(view==='tutor'){renderTutorMessages();initTutor();}if(view==='documents')loadDocuments();if(view==='notifications')loadNotificationSettings();}
-function subjectIdentity(value){const cleaned=String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase();const aliases={'english':'english language','core math':'core mathematics','core maths':'core mathematics','math':'core mathematics','maths':'core mathematics','add math':'additional mathematics','add maths':'additional mathematics','elective mathematics':'additional mathematics','elective maths':'additional mathematics','comp sci':'computer science','computer science':'computer science','social studies':'social studies','ict':'ict'};return aliases[cleaned]||cleaned}
+function subjectIdentity(value){
+ const cleaned=String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase('en');
+ const aliases={'english language':'english','core mathematics':'core math','core maths':'core math','mathematics':'core math','math':'core math','maths':'core math','additional mathematics':'add math','additional math':'add math','add maths':'add math','elective mathematics':'add math','elective maths':'add math','comp sci':'computer science'};
+ return aliases[cleaned]||cleaned;
+}
 function getLearnerSubjects(){
  const raw=state.user?.subjects;
  const values=Array.isArray(raw)?raw.map(value=>String(value??'').trim()).filter(Boolean):typeof raw==='string'?[raw.trim()]:[];
- // Recover labels from older profiles that stored one concatenated subject string.
- const knownPattern=/(chemistry|english(?:\\s*language)?|biology|core\\s*math(?:ematics)?|add(?:itional)?\\s*math(?:ematics)?|social\\s*studies|computer\\s*science)/gi;
- const matches=[...values.join(' ').matchAll(knownPattern)].map(match=>match[0].replace(/\\s+/g,' ').toLowerCase());
- const labels={'chemistry':'Chemistry','english':'English Language','english language':'English Language','biology':'Biology','core math':'Core Math','core mathematics':'Core Math','add math':'Add Math','additional math':'Add Math','additional mathematics':'Add Math','social studies':'Social Studies','computer science':'Computer Science'};
- const candidates=matches.length?matches:values.flatMap(value=>value.split(/[;,\\n|]+/).map(part=>part.trim()).filter(Boolean));
+ const known=/(chemistry|english(?:\s*language)?|biology|core\s*math(?:ematics)?|add(?:itional)?\s*math(?:ematics)?|social\s*studies|computer\s*science)/gi;
+ const labels={'chemistry':'Chemistry','english':'English','english language':'English','biology':'Biology','core math':'Core Math','core mathematics':'Core Math','add math':'Add Math','additional math':'Add Math','additional mathematics':'Add Math','social studies':'Social Studies','computer science':'Computer Science'};
+ const candidates=[];
+ for(const value of values){
+  const matches=[...value.matchAll(known)];
+  const compact=value.toLocaleLowerCase('en').replace(/[\s,;|]+/g,'');
+  const recovered=matches.map(match=>match[0].toLocaleLowerCase('en').replace(/\s+/g,'')).join('');
+  // Split only when the full value is made from the known subject labels.
+  if(matches.length&&recovered===compact)candidates.push(...matches.map(match=>labels[match[0].replace(/\s+/g,' ').toLowerCase()]||match[0]));
+  else candidates.push(...value.split(/[;,|\n]+/).map(item=>item.trim()).filter(Boolean));
+ }
  const seen=new Set();
- return candidates.map(value=>{const key=subjectIdentity(value);return labels[key]||value.replace(/\\s+/g,' ').replace(/\\b\\w/g,char=>char.toUpperCase());}).filter(value=>{const key=subjectIdentity(value);if(!key||seen.has(key))return false;seen.add(key);return true});
+ return candidates.map(value=>{
+  const key=subjectIdentity(value);
+  return labels[key]||String(value).replace(/\s+/g,' ').replace(/\b\w/g,char=>char.toUpperCase());
+ }).filter(value=>{
+  const key=subjectIdentity(value);
+  if(!key||seen.has(key))return false;
+  seen.add(key);return true;
+ });
 }
 function subjectCard(name,i){const description=state.user?.class_level?state.user.class_level+' · Your subject':'Your subject';return '<button type="button" class="subject-card" data-subject="'+esc(name)+'"><span class="subject-icon">'+SUBJECT_ICONS[i%SUBJECT_ICONS.length]+'</span><span class="subject-meta"><b>'+esc(name)+'</b><small>'+esc(description)+'</small></span><span class="subject-arrow" aria-hidden="true">›</span></button>'}
 function renderSubjects(){const subjects=getLearnerSubjects();$('#home-subjects').innerHTML=subjects.length?subjects.slice(0,4).map((s,i)=>subjectCard(s,i)).join():'<p class="empty-state">No subjects registered yet. Add your subjects in Account settings to see them here.</p>';$('#all-subjects').innerHTML=subjects.length?subjects.map((s,i)=>subjectCard(s,i)).join():'<div class="record"><h3>No subjects registered yet</h3><p>Add the subjects you study in Account settings. GetLearny will use that list without adding a second, hardcoded list.</p><button type="button" class="button button-primary" data-go="profile">Open account settings →</button></div>';}
