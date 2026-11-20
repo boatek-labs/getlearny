@@ -71,7 +71,7 @@ In the Android app, open a subject while online and choose **Download next 3 les
 - Responsive browser app and Flutter client using the hosted API by default
 
 ## Production checklist
-Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Browser email verification requires a Gmail SMTP API key and a sender address on a verified domain; Google OAuth, password reset, background web push, and stable Android release signing still require their real provider credentials/configuration. Image OCR is local via Tesseract; scanned-PDF OCR uses Gemini where supported.
+Before real student accounts are used publicly, configure HTTPS, a strong secret, PostgreSQL backups, password reset, data retention/deletion, monitoring, durable private object storage, and Android release signing. Browser email verification requires Gmail SMTP credentials (a Google App Password) and a sender address; Google OAuth, password reset, background web push, and stable Android release signing still require their real provider credentials/configuration. Image OCR is local via Tesseract; scanned-PDF OCR uses Gemini where supported.
 
 
 ### Email verification and guardian approvals (Gmail SMTP)
