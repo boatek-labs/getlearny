@@ -204,12 +204,12 @@ app.post('/api/v1/auth/google',asyncRoute(async(req,res)=>{
 }));
 app.post('/api/v1/auth/register/request-otp',emailOtpLimiter,asyncRoute(async(req,res)=>{
  if(!envReady())return fail(res,503,'Authentication is not configured');
- if(!emailConfigured())return fail(res,503,'Email verification is not configured. Add SMTP_USER, SMTP_PASS and EMAIL_FROM in Vercel, then redeploy.');
  const parsed=registration.safeParse(req.body);
  if(!parsed.success)return fail(res,400,parsed.error.issues[0].message);
  const data=parsed.data;const email=data.email.toLowerCase();
  const consent=validateSignupConsent(data,email);
  if(!consent.ok)return res.status(400).json({error:consent.error,needs_guardian:Boolean(consent.needsGuardian)});
+ if(!emailConfigured())return fail(res,503,'Email verification is not configured. Add SMTP_USER, SMTP_PASS and EMAIL_FROM in Vercel, then redeploy.');
  if(consent.minor&&!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');
  const existing=await query('SELECT id FROM users WHERE email=$1',[email]);
  if(existing.rowCount)return fail(res,409,'An account with this email already exists. Sign in instead.');
