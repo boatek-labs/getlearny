@@ -11,7 +11,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import webPush from 'web-push';
-import { sendEmail, emailConfigured } from './mailer.js';
+import { sendEmail, emailConfigured, brandedEmail } from './mailer.js';
 import pdfParse from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
 import { query, health } from './db.js';
@@ -218,7 +218,7 @@ app.post('/api/v1/auth/register/request-otp',emailOtpLimiter,asyncRoute(async(re
  const passwordHash=await bcrypt.hash(data.password,12);
  await query('INSERT INTO email_verification_codes(email,otp_hash,pending_data,expires_at,attempts) VALUES($1,$2,$3::jsonb,now()+interval \'10 minutes\',0) ON CONFLICT(email) DO UPDATE SET otp_hash=EXCLUDED.otp_hash,pending_data=EXCLUDED.pending_data,expires_at=EXCLUDED.expires_at,attempts=0,created_at=now()',[email,otpHash,JSON.stringify({name:data.name,email,class_level:data.class_level,subjects:normalizeSubjectList(data.subjects),password_hash:passwordHash,referral_code:data.referral_code,date_of_birth:consent.dob,guardian_email:consent.guardianEmail,terms_version:TERMS_VERSION})]);
  try{
-  await sendEmail({to:email,subject:'Your GetLearny verification code',text:'Hello '+data.name+',\n\nYour GetLearny verification code is '+otp+'. It expires in 10 minutes. If you did not request this, you can ignore this email.\n\nGetLearny'});
+  await sendEmail({to:email,subject:'Your GetLearny verification code',text:'Hello '+data.name+',\n\nYour GetLearny verification code is '+otp+'. It expires in 10 minutes. If you did not request this, you can ignore this email.\n\nGetLearny · Built by Boatek Labs',html:brandedEmail({preheader:'Your GetLearny verification code',title:'Verify your email address',greeting:'Hello '+data.name+',',paragraphs:['Use the six-digit code below to finish creating your GetLearny account.','This code expires in 10 minutes. If you did not request it, you can safely ignore this message.'],code:otp,footnote:'For your security, never share this code with anyone.'})});
  }catch(error){console.error('Verification email failed:',error?.message||'SMTP error');await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,502,'The verification email could not be sent. Check SMTP_USER, SMTP_PASS and EMAIL_FROM, then try again.')}
  res.status(202).json({message:'Verification code sent. Check your inbox and spam folder.',email,expiresInSeconds:600});
 }));
