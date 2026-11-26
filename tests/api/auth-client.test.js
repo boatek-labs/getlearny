@@ -23,6 +23,8 @@ test('age and terms declaration responses preserve the provisional Google sessio
 
   assert.ok(app.includes("error.code=typeof data.code==='string'?data.code:''"));
   assert.ok(app.includes("error.status===403&&['AGE_DECLARATION_REQUIRED','TERMS_REACCEPT_REQUIRED'].includes(error.code)"));
+  const auth = await read('../../web/auth.js');
+  assert.ok(auth.includes("if(d.guardian_pending){setMode('login');msg(d.message||"), 'minor OTP signup must show the guardian approval state');
 });
 
 test('legacy direct registration cannot bypass email OTP verification', async () => {
