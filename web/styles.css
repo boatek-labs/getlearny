@@ -913,3 +913,71 @@ html[data-theme="dark"] #view-profile .auth-card #otp-wrap{background:#1d1b30;bo
 \n/* Study streak and buddy invitation panel */\n.community-card{margin:26px 0;padding:24px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(135deg,#fff 0%,#f7f5ff 100%);box-shadow:0 10px 30px rgba(28,31,70,.045)}.community-card-heading{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.community-card h2{font:800 22px Manrope,sans-serif;letter-spacing:-.6px;margin:8px 0}.community-card p{color:var(--muted);margin:0}.community-flame{display:grid;place-items:center;width:48px;height:48px;border-radius:15px;background:#fff0e4;color:#e87836;font-size:22px;flex-shrink:0}.community-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:22px 0}.community-stats>div{padding:15px;background:rgba(255,255,255,.8);border:1px solid #eceaf7;border-radius:15px}.community-stats span{display:block;font-size:12px;color:var(--muted);margin-bottom:7px}.community-stats strong{font:800 25px Manrope,sans-serif}.community-stats small{font:600 11px 'DM Sans',sans-serif;color:var(--muted)}.community-actions{display:flex;flex-wrap:wrap;gap:10px}.community-actions .button{display:inline-flex;align-items:center;gap:8px}.community-note{margin-top:14px!important;font-size:12px}@media(max-width:600px){.community-card{padding:18px}.community-card h2{font-size:19px}.community-stats{gap:8px}.community-stats>div{padding:12px 10px}.community-stats strong{font-size:22px}.community-actions{display:grid}.community-actions .button{width:100%;justify-content:center}}body.dark .community-card{background:linear-gradient(135deg,#1a1d36,#20203a);border-color:#343650}body.dark .community-stats>div{background:#252842;border-color:#373a58}\n
 /* Tutor answer typography: readable hierarchy for structured AI output. */
 .from-ai .message-content>h2{font:800 20px/1.3 Manrope,sans-serif;margin:22px 0 9px;letter-spacing:-.35px}.from-ai .message-content>h3{font:800 16px/1.4 Manrope,sans-serif;margin:18px 0 7px}.from-ai .message-content>h4{font:800 14px/1.4 Manrope,sans-serif;margin:15px 0 6px}.from-ai .message-content li{padding-left:3px;margin:4px 0;line-height:1.75}.from-ai .message-content blockquote{margin:12px 0;padding:10px 14px;border-left:3px solid var(--blue);background:var(--blue-soft);border-radius:0 10px 10px 0;color:var(--ink)}.from-ai .message-content hr{border:0;border-top:1px solid var(--line);margin:18px 0}.from-ai .message-content .tutor-code{margin:12px 0;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--paper);overflow:auto;white-space:pre;line-height:1.6}.from-ai .message-content .tutor-code code{background:transparent;padding:0}.from-ai .message-content .tutor-math{font-size:13px;line-height:1.7;border:1px solid var(--line)}.from-ai .message-content strong{font-weight:800;color:var(--ink)}
+
+
+/* Dashboard spacing and alignment pass */
+.main{padding:0 clamp(18px,3.2vw,46px) 42px}
+.main>.topbar,.main>.view,.main>footer{width:100%;max-width:1480px;margin-left:auto;margin-right:auto}
+.topbar{display:flex;align-items:center;min-height:72px;margin-bottom:30px;padding:0 0 12px}
+.view{padding:0 0 34px}
+.view>.eyebrow{margin:0 0 12px}
+.view>h1{margin:0 0 12px;max-width:900px}
+.view>.lead{margin:0 0 30px;max-width:760px}
+#view-home>.hero{margin:0 0 38px}
+.section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:34px 0 16px}
+.section-heading>div{min-width:0}
+.section-heading h2{margin:0 0 5px;line-height:1.25;letter-spacing:-.45px}
+.section-heading p{margin:0;line-height:1.55}
+.stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch}
+.stat-card{min-width:0;min-height:156px;padding:19px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.stat-card>span{line-height:1.4}
+.stat-card>b{line-height:1.1;margin-top:2px}
+.stat-card>small{margin-top:auto;line-height:1.45}
+.stat-icon{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px}
+.subject-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
+.subject-grid>.subject-card,.subject-grid>article{min-width:0;height:100%}
+.community-card{margin:34px 0;padding:26px}
+.tip-card{margin:22px 0 0;display:flex;align-items:flex-start;gap:16px;padding:20px 22px}
+.tip-card>div:last-child{min-width:0}
+.form-card,.practice-card,.lesson-panel{margin:22px 0;padding:clamp(18px,2.6vw,28px)}
+.record-list{display:grid;gap:12px;margin-top:18px}
+.tutor-layout{align-items:start;gap:22px}
+.tutor-side,.tutor-chat-card{min-width:0}
+.tutor-chat-card{min-height:650px}
+footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:26px 0;margin-top:26px}
+.nav-item span,.stat-icon,.hero-tag,.icon-button{display:grid;place-items:center}
+.stat-icon i{font-size:16px;line-height:1}
+@media(max-width:1100px){
+ .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .subject-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:900px){
+ .main{padding:0 20px 32px}
+ .topbar{margin-bottom:24px}
+ .view>.lead{margin-bottom:24px}
+ .section-heading{margin-top:28px}
+ .tutor-layout{grid-template-columns:1fr}
+ .tutor-chat-card{min-height:560px}
+}
+@media(max-width:600px){
+ .main{padding:0 14px 28px}
+ .topbar{min-height:60px;margin-bottom:20px;padding-bottom:8px}
+ .view{padding-bottom:24px}
+ .view>.lead{font-size:14px;line-height:1.65;margin-bottom:22px}
+ #view-home>.hero{margin-bottom:28px}
+ .section-heading{align-items:flex-start;margin:27px 0 13px}
+ .section-heading h2{font-size:18px}
+ .stats-grid{gap:10px}
+ .stat-card{min-height:142px;padding:14px;gap:7px}
+ .stat-card>span{font-size:12px}
+ .stat-card>b{font-size:25px}
+ .stat-card>small{font-size:10px}
+ .subject-grid{grid-template-columns:1fr;gap:12px}
+ .community-card{margin:26px 0;padding:17px}
+ .tip-card{padding:16px;gap:12px}
+ .form-card,.practice-card,.lesson-panel{margin:16px 0;padding:17px}
+ footer{display:grid;gap:6px;padding:22px 0}
+}
+@media(prefers-reduced-motion:reduce){
+ .stat-card,.nav-item{transition:none!important}
+}
