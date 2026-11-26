@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs';
-import { randomUUID, randomInt, createHash } from 'node:crypto';
+import { randomUUID, randomInt, createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -232,16 +232,19 @@ app.post('/api/v1/auth/register/verify-otp',emailOtpLimiter,asyncRoute(async(req
  if(!record)return fail(res,400,'No active verification request. Create your account again to receive a new code.');
  if(new Date(record.expires_at).getTime()<Date.now()){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,400,'That code has expired. Request a new verification code.')}
  if(record.attempts>=5){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,429,'Too many incorrect attempts. Request a new verification code.')}
- const submitted=createHash('sha256').update(email+':'+parsed.data.code+':'+process.env.JWT_SECRET).digest('hex');
- if(submitted!==record.otp_hash){await query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE email=$1',[email]);return fail(res,400,'That verification code is incorrect. Check it and try again.')}
- const data=record.pending_data;
+ const submitted=createHash('sha256').update(email+':'+parsed.data.code+':'+process.env.JWT_SECRET).digest();
+ const expected=Buffer.from(String(record.otp_hash||''),'hex');
+ if(expected.length!==submitted.length||!timingSafeEqual(submitted,expected)){await query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE email=$1 AND expires_at>now()',[email]);return fail(res,400,'That verification code is incorrect. Check it and try again.')}
+ // Consume the exact code atomically so simultaneous requests cannot verify it twice.
+ const consumed=await query('DELETE FROM email_verification_codes WHERE email=$1 AND otp_hash=$2 AND expires_at>now() AND attempts<5 RETURNING pending_data',[email,submitted.toString('hex')]);
+ if(!consumed.rowCount)return fail(res,400,'This verification code is no longer active. Request a new code and try again.');
+ const data=consumed.rows[0].pending_data;
  try{
   if(!data.date_of_birth||!data.terms_version){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,400,'Please create your account again so we can confirm your date of birth and terms acceptance.');}
   const minor=ageOn(data.date_of_birth)<ADULT_AGE;
   if(minor&&!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');
   const created=await query(`INSERT INTO users(name,email,password_hash,class_level,subjects,date_of_birth,age_declared_at,terms_accepted_at,terms_version,account_status) VALUES($1,$2,$3,$4,$5,$6,now(),now(),$7,$8) RETURNING ${USER_COLUMNS}`,[data.name,email,data.password_hash,data.class_level,normalizeSubjectList(data.subjects||[]),data.date_of_birth,TERMS_VERSION,minor?'pending_guardian':'active']);
   if(data.referral_code){const ref=await query('SELECT owner_user_id FROM referral_codes WHERE code=$1',[data.referral_code]);if(ref.rowCount&&ref.rows[0].owner_user_id!==created.rows[0].id)await query('INSERT INTO referrals(referrer_user_id,referred_user_id,referral_code) VALUES($1,$2,$3) ON CONFLICT(referred_user_id) DO NOTHING',[ref.rows[0].owner_user_id,created.rows[0].id,data.referral_code]);}
-  await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);
   const user=created.rows[0];
   if(minor){const approval=await createGuardianRequest({userId:user.id,childName:user.name,kind:'account',guardianEmail:data.guardian_email});return res.status(202).json({guardian_pending:true,guardian_email_sent:approval.sent,message:'Account created. Your parent or guardian must approve it before you can sign in.'});}
   const token=jwt.sign({sub:user.id,email:user.email,role:user.role},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||'7d',issuer:'getlearny-api',audience:'getlearny-app'});
