@@ -181,12 +181,17 @@ app.post('/api/v1/auth/google',asyncRoute(async(req,res)=>{
  let user=found.rows[0];let createdNew=false,consent=null;
  if(user){const gate=accountGate(user.account_status);if(gate)return res.status(403).json({error:gate.message,code:gate.code,can_resend:true});}
  if(!user){
-  consent=validateSignupConsent(req.body,email);
-  if(!consent.ok){if(!req.body?.date_of_birth)return res.json({needs_age:true,name:displayName,terms_version:TERMS_VERSION});return res.status(400).json({error:consent.error,needs_guardian:Boolean(consent.needsGuardian)});}
+  if(!req.body?.date_of_birth){
+   // Create the verified Google identity first; the authenticated app then requires age and terms confirmation before any protected data is available.
+   consent={ok:true,dob:null,minor:false,guardianEmail:''};
+  }else{
+   consent=validateSignupConsent(req.body,email);
+   if(!consent.ok)return res.status(400).json({error:consent.error,needs_guardian:Boolean(consent.needsGuardian)});
+  }
   if(consent.minor&&!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');
   const passwordHash=await bcrypt.hash(randomUUID()+randomUUID(),12);
   try{
-   const created=await query(`INSERT INTO users(name,email,password_hash,class_level,subjects,date_of_birth,age_declared_at,terms_accepted_at,terms_version,account_status) VALUES($1,$2,$3,$4,$5,$6,now(),now(),$7,$8) RETURNING ${USER_COLUMNS}`,[displayName,email,passwordHash,'',[],consent.dob,TERMS_VERSION,consent.minor?'pending_guardian':'active']);
+   const created=await query(`INSERT INTO users(name,email,password_hash,class_level,subjects,date_of_birth,age_declared_at,terms_accepted_at,terms_version,account_status) VALUES($1,$2,$3,$4,$5,$6,CASE WHEN $6::date IS NULL THEN NULL ELSE now() END,CASE WHEN $6::date IS NULL THEN NULL ELSE now() END,CASE WHEN $6::date IS NULL THEN NULL ELSE $7 END,$8) RETURNING ${USER_COLUMNS}`,[displayName,email,passwordHash,'',[],consent.dob,TERMS_VERSION,consent.minor?'pending_guardian':'active']);
    user=created.rows[0];createdNew=true;
    const referralCode=typeof req.body?.referral_code==='string'?req.body.referral_code.trim().slice(0,32):'';
    if(referralCode){const ref=await query('SELECT owner_user_id FROM referral_codes WHERE code=$1',[referralCode]);if(ref.rowCount&&ref.rows[0].owner_user_id!==user.id)await query('INSERT INTO referrals(referrer_user_id,referred_user_id,referral_code) VALUES($1,$2,$3) ON CONFLICT(referred_user_id) DO NOTHING',[ref.rows[0].owner_user_id,user.id,referralCode]);}
