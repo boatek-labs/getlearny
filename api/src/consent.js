@@ -7,10 +7,25 @@ export const LOCATION_CONSENT_VERSION = '2026-11-26';
 export const ADULT_AGE = 18;
 export const USER_COLUMNS = 'id,name,email,role,avatar_data,class_level,subjects,created_at,date_of_birth,age_declared_at,terms_accepted_at,terms_version,account_status';
 
+export function dateOnly(value) {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return '';
+    // node-postgres parses DATE values at local midnight; use local calendar parts.
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return year + '-' + month + '-' + day;
+  }
+  if (typeof value !== 'string') return '';
+  const match = /^(\d{4}-\d{2}-\d{2})(?:$|T)/.exec(value.trim());
+  return match?.[1] || '';
+}
+
 export function ageOn(value, now = new Date()) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return NaN;
-  const dob = new Date(value + 'T00:00:00.000Z');
-  if (Number.isNaN(dob.getTime()) || dob.toISOString().slice(0, 10) !== value) return NaN;
+  const normalized = dateOnly(value);
+  if (!normalized) return NaN;
+  const dob = new Date(normalized + 'T00:00:00.000Z');
+  if (Number.isNaN(dob.getTime()) || dob.toISOString().slice(0, 10) !== normalized) return NaN;
   let age = now.getUTCFullYear() - dob.getUTCFullYear();
   if (now.getUTCMonth() < dob.getUTCMonth() ||
       (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate())) age--;
@@ -115,7 +130,7 @@ export function registerConsentRoutes(app, { asyncRoute, authAny, fail }) {
     if (!['granted', 'withdrawn'].includes(choice)) return fail(res, 400, 'Choose whether to grant or withdraw location consent.');
     const user = await query('SELECT id,name,email,date_of_birth FROM users WHERE id=$1', [req.user.sub]);
     if (!user.rowCount || !user.rows[0].date_of_birth) return fail(res, 403, 'Confirm your date of birth before changing consent settings.');
-    const age = ageOn(String(user.rows[0].date_of_birth).slice(0, 10));
+    const age = ageOn(user.rows[0].date_of_birth);
     if (age < ADULT_AGE && choice === 'granted') {
       const guardianEmail = String(req.body?.guardian_email || '').trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guardianEmail) || guardianEmail === String(user.rows[0].email).toLowerCase()) return fail(res, 400, 'Enter a valid parent or guardian email different from your own.');

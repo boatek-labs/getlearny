@@ -16,7 +16,7 @@ import pdfParse from 'pdf-parse';
 import { createWorker } from 'tesseract.js';
 import { query, health } from './db.js';
 import { normalizeStudyDays, computeStreak } from './streak.js';
-import { TERMS_VERSION, ADULT_AGE, USER_COLUMNS, ageOn, validateSignupConsent, accountGate, publicUser, guardianEmailReady, createGuardianRequest, registerConsentRoutes } from './consent.js';
+import { TERMS_VERSION, ADULT_AGE, USER_COLUMNS, ageOn, dateOnly, validateSignupConsent, accountGate, publicUser, guardianEmailReady, createGuardianRequest, registerConsentRoutes } from './consent.js';
 
 const app=express();
 // Vercel sits in front of this serverless function and forwards the client IP.
@@ -120,8 +120,8 @@ app.post('/api/v1/me/age-declaration',authAny,asyncRoute(async(req,res)=>{
  if(!parsed.success)return fail(res,400,'Enter a valid date of birth and accept the Terms of Use and Privacy Notice.');
  const current=await query('SELECT id,name,email,date_of_birth,terms_version FROM users WHERE id=$1',[req.user.sub]);if(!current.rowCount)return fail(res,404,'Account not found');
  if(current.rows[0].date_of_birth&&current.rows[0].terms_version===TERMS_VERSION)return fail(res,409,'Your account details are already up to date.');
- const dobToSave=current.rows[0].date_of_birth?String(current.rows[0].date_of_birth).slice(0,10):parsed.data.date_of_birth;
- const age=ageOn(dobToSave);if(!Number.isFinite(age)||age<10)return fail(res,400,'You must be at least 10 years old to use GetLearny.');
+ const dobToSave=current.rows[0].date_of_birth?dateOnly(current.rows[0].date_of_birth):parsed.data.date_of_birth;
+ if(!dobToSave)return fail(res,400,'Enter a valid date of birth.');const age=ageOn(dobToSave);if(!Number.isFinite(age))return fail(res,400,'Enter a valid date of birth.');if(age<10)return fail(res,400,'You must be at least 10 years old to use GetLearny.');
  if(age<ADULT_AGE){if(!guardianEmailReady())return fail(res,503,'Parent approval emails are not configured yet. Please try again later.');if(!parsed.data.guardian_email||parsed.data.guardian_email.toLowerCase()===String(current.rows[0].email).toLowerCase())return fail(res,400,'Enter a parent or guardian email different from your own.');}
  const status=age<ADULT_AGE?'pending_guardian':'active';
  await query('UPDATE users SET date_of_birth=$1,age_declared_at=COALESCE(age_declared_at,now()),terms_accepted_at=now(),terms_version=$2,account_status=$3,updated_at=now() WHERE id=$4',[dobToSave,TERMS_VERSION,status,req.user.sub]);

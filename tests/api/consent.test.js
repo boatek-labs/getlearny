@@ -1,12 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ageOn, validateSignupConsent, accountGate } from '../../api/src/consent.js';
+import { ageOn, dateOnly, validateSignupConsent, accountGate } from '../../api/src/consent.js';
 
 test('ageOn calculates age before and after birthday', () => {
   const now = new Date('2026-10-29T12:00:00Z');
   assert.equal(ageOn('2008-10-29', now), 18);
   assert.equal(ageOn('2008-10-30', now), 17);
   assert.ok(Number.isNaN(ageOn('2026-02-31', now)));
+});
+
+test('dateOnly and ageOn handle PostgreSQL DATE values returned as Date objects', () => {
+  const now = new Date('2026-11-26T12:00:00Z');
+  const tenYearOldBirthday = new Date(2016, 10, 26);
+  assert.equal(dateOnly(tenYearOldBirthday), '2016-11-26');
+  assert.equal(dateOnly('2010-03-04T00:00:00.000Z'), '2010-03-04');
+  assert.equal(dateOnly(new Date('invalid')), '');
+  assert.equal(ageOn(tenYearOldBirthday, now), 10);
+  assert.equal(ageOn(new Date(2008, 10, 27), now), 17);
 });
 
 test('signup requires a valid date of birth and terms acceptance', () => {
