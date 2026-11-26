@@ -2,8 +2,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { query } from './db.js';
 import { sendEmail, emailConfigured, brandedEmail } from './mailer.js';
 
-export const TERMS_VERSION = '2026-10-27';
-export const LOCATION_CONSENT_VERSION = '2026-10-27';
+export const TERMS_VERSION = '2026-11-26';
+export const LOCATION_CONSENT_VERSION = '2026-11-26';
 export const ADULT_AGE = 18;
 export const USER_COLUMNS = 'id,name,email,role,avatar_data,class_level,subjects,created_at,date_of_birth,age_declared_at,terms_accepted_at,terms_version,account_status';
 
