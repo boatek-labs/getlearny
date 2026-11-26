@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main, master]
-    paths: ['api/**', 'web/**', 'package.json', 'vercel.json', '.github/workflows/api-checks.yml']
+    paths: ['api/**', 'tests/**', 'web/**', 'package.json', 'vercel.json', '.github/workflows/api-checks.yml']
   pull_request:
-    paths: ['api/**', '.github/workflows/api-checks.yml']
+    paths: ['api/**', 'tests/**', 'web/**', 'package.json', 'vercel.json', '.github/workflows/api-checks.yml']
 
 permissions:
   contents: read

@@ -37,8 +37,34 @@ async function api(path,opts={}) {
  }
 }
 function showView(view){state.view=view;$$('.view').forEach(el=>el.classList.toggle('active',el.id===`view-${view}`));$$('.nav-item').forEach(el=>el.classList.toggle('active',el.dataset.view===view));$('#crumb').textContent=({home:'Overview',subjects:'My subjects',tutor:'AI tutor',practice:'Practice',journal:'Learning journal',tests:'Test tracker',documents:'Study files',notifications:'Notifications',profile:'Account'})[view]||view;window.scrollTo({top:0,behavior:'smooth'});if(view==='practice')renderQuiz();if(view==='profile')fillProfile();if(view==='subjects')renderSubjects();if(view==='tutor'){renderTutorMessages();initTutor();}if(view==='documents')loadDocuments();if(view==='notifications')loadNotificationSettings();}
-function subjectIdentity(value){const cleaned=String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase();const aliases={'english':'english language','core math':'core mathematics','core maths':'core mathematics','math':'core mathematics','maths':'core mathematics','add math':'additional mathematics','add maths':'additional mathematics','elective mathematics':'additional mathematics','elective maths':'additional mathematics','comp sci':'computer science','computer science':'computer science','social studies':'social studies','ict':'ict'};return aliases[cleaned]||cleaned}
-function getLearnerSubjects(){const raw=Array.isArray(state.user?.subjects)?state.user.subjects:[];const seen=new Set();return raw.map(s=>String(s??'').trim().replace(/\s+/g,' ')).filter(s=>{if(!s)return false;const key=subjectIdentity(s);if(seen.has(key))return false;seen.add(key);return true})}
+function subjectIdentity(value){
+ const cleaned=String(value??'').normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase('en');
+ const aliases={'english language':'english','core mathematics':'core math','core maths':'core math','mathematics':'core math','math':'core math','maths':'core math','additional mathematics':'add math','additional math':'add math','add maths':'add math','elective mathematics':'add math','elective maths':'add math','comp sci':'computer science'};
+ return aliases[cleaned]||cleaned;
+}
+function getLearnerSubjects(){
+ const raw=state.user?.subjects;
+ const values=Array.isArray(raw)?raw.map(value=>String(value??'').trim()).filter(Boolean):typeof raw==='string'?[raw.trim()]:[];
+ const known=/(chemistry|english(?:\s*language)?|biology|core\s*math(?:ematics)?|add(?:itional)?\s*math(?:ematics)?|social\s*studies|computer\s*science)/gi;
+ const labels={'chemistry':'Chemistry','english':'English','english language':'English','biology':'Biology','core math':'Core Math','core mathematics':'Core Math','add math':'Add Math','additional math':'Add Math','additional mathematics':'Add Math','social studies':'Social Studies','computer science':'Computer Science'};
+ const candidates=[];
+ for(const value of values){
+  const matches=[...value.matchAll(known)];
+  const compact=value.toLocaleLowerCase('en').replace(/[\s,;|]+/g,'');
+  const recovered=matches.map(match=>match[0].toLocaleLowerCase('en').replace(/\s+/g,'')).join('');
+  if(matches.length&&recovered===compact)candidates.push(...matches.map(match=>labels[match[0].replace(/\s+/g,' ').toLowerCase()]||match[0]));
+  else candidates.push(...value.split(/[;,|\n]+/).map(item=>item.trim()).filter(Boolean));
+ }
+ const seen=new Set();
+ return candidates.map(value=>{
+  const key=subjectIdentity(value);
+  return labels[key]||String(value).replace(/\s+/g,' ').replace(/\b\w/g,char=>char.toUpperCase());
+ }).filter(value=>{
+  const key=subjectIdentity(value);
+  if(!key||seen.has(key))return false;
+  seen.add(key);return true;
+ });
+}
 function subjectCard(name,i){const description=state.user?.class_level?state.user.class_level+' · Your subject':'Your subject';return '<button type="button" class="subject-card" data-subject="'+esc(name)+'"><span class="subject-icon">'+SUBJECT_ICONS[i%SUBJECT_ICONS.length]+'</span><span class="subject-meta"><b>'+esc(name)+'</b><small>'+esc(description)+'</small></span><span class="subject-arrow" aria-hidden="true">›</span></button>'}
 function renderSubjects(){const subjects=getLearnerSubjects();$('#home-subjects').innerHTML=subjects.length?subjects.slice(0,4).map((s,i)=>subjectCard(s,i)).join():'<p class="empty-state">No subjects registered yet. Add your subjects in Account settings to see them here.</p>';$('#all-subjects').innerHTML=subjects.length?subjects.map((s,i)=>subjectCard(s,i)).join():'<div class="record"><h3>No subjects registered yet</h3><p>Add the subjects you study in Account settings. GetLearny will use that list without adding a second, hardcoded list.</p><button type="button" class="button button-primary" data-go="profile">Open account settings →</button></div>';}
 function selectSubject(name){
@@ -50,23 +76,48 @@ function selectSubject(name){
 }
 async function renderTopicCatalog(s,panel){const target=panel.querySelector('#topic-catalog');try{const r=await api(`/topics?subject=${encodeURIComponent(s.code)}&limit=100`);const topics=r.topics||[];if(!topics.length)throw new Error('No published topics are available for this subject yet.');target.innerHTML=`<div class="catalog-heading"><b>Topic catalogue</b><span>${topics.length} topics</span></div><div class="topic-choice-list">${topics.map(t=>`<button type="button" class="topic-choice ${t.title===state.selectedTopic?'selected':''}" data-topic="${esc(t.title)}"><span><b>${esc(t.title)}</b><small>${esc(t.description||'Select to study this topic')}</small></span><span aria-hidden="true">→</span></button>`).join('')}</div>`;target.querySelectorAll('[data-topic]').forEach(button=>button.addEventListener('click',()=>{state.selectedTopic=button.dataset.topic;panel.querySelector('#selected-topic-heading').textContent=`${s.name}: ${state.selectedTopic}`;target.querySelectorAll('[data-topic]').forEach(item=>item.classList.toggle('selected',item===button));panel.querySelector('#lesson-content').innerHTML=''}))}catch(error){target.innerHTML=`<div class="record"><h3>Topic catalogue unavailable</h3><p>${esc(error.message)}</p><p>GetLearny will not invent topics. Reconnect and retry to load the published catalogue.</p><button type="button" class="button button-light" id="retry-topic-catalog">Retry catalogue</button></div>`;target.querySelector('#retry-topic-catalog').addEventListener('click',()=>renderTopicCatalog(s,panel))}}
 function markdownLite(input){
- const source=String(input??'').replace(/<u>([\s\S]*?)<\/(?:u)?\s*>/gi,(_,inner)=>'%%UNDERLINE_OPEN%%'+inner+'%%UNDERLINE_CLOSE%%');
- let text=esc(source).replace(/%%UNDERLINE_OPEN%%/g,'<u>').replace(/%%UNDERLINE_CLOSE%%/g,'</u>');
- const cleanMath=value=>String(value).replace(/\\(?:text|mathrm)\s*\{([^}]*)\}/g,'$1').replace(/\\frac\s*\{([^}]*)\}\s*\{([^}]*)\}/g,'($1)/($2)').replace(/\\times/g,'×').replace(/\\rightarrow/g,'→').replace(/\\cdot/g,'·').replace(/\\,/g,' ').replace(/[{}]/g,'');
+ // Render a safe Markdown subset with readable structure for tutor and lesson answers.
+ const tick=String.fromCharCode(96), fence=tick.repeat(3), codeBlocks=[];
+ const raw=String(input??'').replace(/\r\n?/g,'\n');
+ const fencePattern=new RegExp(fence+'([^\\n]*)\\n([\\s\\S]*?)\\n?'+fence,'g');
+ let text=raw.replace(fencePattern,(_,language,code)=>{
+  const id=codeBlocks.length;
+  codeBlocks.push('<pre class="tutor-code"><code>'+esc(code.trim())+'</code></pre>');
+  return '\n%%CODE_BLOCK_'+id+'%%\n';
+ });
+ text=esc(text);
+ const cleanMath=value=>String(value)
+  .replace(/\\(?:text|mathrm|mathbf)\s*\{([^}]*)\}/g,'$1')
+  .replace(/\\frac\s*\{([^}]*)\}\s*\{([^}]*)\}/g,'($1)/($2)')
+  .replace(/\\sqrt\s*\{([^}]*)\}/g,'√($1)')
+  .replace(/\\times/g,'×').replace(/\\div/g,'÷').replace(/\\pm/g,'±')
+  .replace(/\\rightarrow/g,'→').replace(/\\cdot/g,'·').replace(/\\,/g,' ')
+  .replace(/[{}]/g,'');
  text=text.replace(/\$\$([\s\S]*?)\$\$/g,(_,math)=>'<div class="tutor-math">'+esc(cleanMath(math))+'</div>');
  text=text.replace(/\$([^\n$]+)\$/g,(_,math)=>'<span class="tutor-math-inline">'+esc(cleanMath(math))+'</span>');
- text=text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g,'<em>$1</em>').replace(/~~(.+?)~~/g,'<del>$1</del>');
- const tick=String.fromCharCode(96);text=text.replace(new RegExp(tick+'([^'+tick+']+)'+tick,'g'),'<code>$1</code>');
- const lines=text.split('\n'),out=[];let list=null;
- const close=()=>{if(list){out.push(list==='ol'?'</ol>':'</ul>');list=null;}};
- for(const line of lines){let match;
-  if((match=line.match(/^\s*#{1,3}\s+(.+)$/))){close();const level=(line.match(/^\s*(#+)/)||['','#'])[1].length;const tag='h'+Math.min(level+1,4);out.push('<'+tag+'>'+match[1]+'</'+tag+'>');}
-  else if((match=line.match(/^\s*(?:[-*•])\s+(.+)$/))){if(list!=='ul'){close();list='ul';out.push('<ul>');}out.push('<li>'+match[1]+'</li>');}
-  else if((match=line.match(/^\s*\d+[.)]\s+(.+)$/))){if(list!=='ol'){close();list='ol';out.push('<ol>');}out.push('<li>'+match[1]+'</li>');}
-  else if(!line.trim()){close();}
-  else {close();out.push('<p>'+line+'</p>');}
+ const inline=value=>value
+  .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+  .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g,'<em>$1</em>')
+  .replace(/~~(.+?)~~/g,'<del>$1</del>')
+  .replace(new RegExp(tick+'([^'+tick+']+)'+tick,'g'),'<code>$1</code>');
+ const lines=text.split('\n'),out=[];
+ let list=null,paragraph=[];
+ const closeList=()=>{if(list){out.push(list==='ol'?'</ol>':'</ul>');list=null;}};
+ const flushParagraph=()=>{if(paragraph.length){out.push('<p>'+inline(paragraph.join(' '))+'</p>');paragraph=[];}};
+ for(const rawLine of lines){
+  const line=rawLine.trim();
+  if(!line){flushParagraph();closeList();continue;}
+  if(/^%%CODE_BLOCK_\d+%%$/.test(line)){flushParagraph();closeList();out.push(line);continue;}
+  let match;
+  if((match=line.match(/^(#{1,6})\s+(.+)$/))){flushParagraph();closeList();const level=Math.min(match[1].length+1,4);out.push('<h'+level+'>'+inline(match[2])+'</h'+level+'>');continue;}
+  if(/^([-*_])(?:\s*\1){2,}$/.test(line)){flushParagraph();closeList();out.push('<hr>');continue;}
+  if((match=line.match(/^>\s?(.*)$/))){flushParagraph();closeList();out.push('<blockquote>'+inline(match[1])+'</blockquote>');continue;}
+  if((match=line.match(/^\s*[-*+]\s+(.+)$/))){flushParagraph();if(list!=='ul'){closeList();list='ul';out.push('<ul>');}out.push('<li>'+inline(match[1])+'</li>');continue;}
+  if((match=line.match(/^\s*\d+[.)]\s+(.+)$/))){flushParagraph();if(list!=='ol'){closeList();list='ol';out.push('<ol>');}out.push('<li>'+inline(match[1])+'</li>');continue;}
+  closeList();paragraph.push(line);
  }
- close();return out.join('');
+ flushParagraph();closeList();
+ return out.join('').replace(/%%CODE_BLOCK_(\d+)%%/g,(_,id)=>codeBlocks[Number(id)]||'');
 }
 async function generateLesson(s){const topic=state.selectedTopic||s.topic;const target=$('#lesson-content');if(!state.token){target.innerHTML='<div class="lesson-panel"><h3>Sign in to generate your lesson</h3><p>Connect your account to use the live lesson service and save your progress across devices.</p><button class="button button-primary" id="lesson-sign-in">Open account →</button></div>';$('#lesson-sign-in').onclick=()=>location.assign('/?auth=login');return}target.innerHTML='<p>Preparing your lesson…</p>';try{const r=await api('/lessons/generate',{method:'POST',body:JSON.stringify({subject:s.name,topic,level:state.user?.class_level||'Not specified',exam:'General'})});target.innerHTML=`<div class="lesson-panel">${markdownLite(r.lesson)}</div>`}catch(e){target.innerHTML='<div class="lesson-panel"><h3>Lesson unavailable</h3><p>'+esc(e.message)+'</p><p>Check GEMINI_API_KEY, GEMINI_MODEL and Gemini API access in the API deployment. No sample lesson was substituted.</p></div>'}}
 
