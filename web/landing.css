@@ -116,3 +116,7 @@ body.auth-open{overflow:hidden}
 
 /* Age and terms fields in the signup dialog. */
 .auth-consent{display:flex;align-items:flex-start;gap:10px;font-size:.9rem;line-height:1.5;color:var(--text-secondary,#5c606a);margin:8px 0 14px}.auth-consent input{margin-top:4px;flex:0 0 auto}.auth-consent a{color:inherit;text-decoration:underline}.auth-field small{display:block;margin-top:5px;font-size:.8rem;line-height:1.45;opacity:.8}
+
+
+/* Signup date-of-birth field: dark, bordered input with custom JS validation. */
+#landing-dob-wrap input[name="date_of_birth"]{color:#f4f3ff;background:#17172b;border:1px solid #49465f;border-radius:12px;box-shadow:inset 0 1px 2px rgba(0,0,0,.22);caret-color:#b9adff;color-scheme:dark;letter-spacing:.04em}#landing-dob-wrap input[name="date_of_birth"]::placeholder{color:#89869f;opacity:1}#landing-dob-wrap input[name="date_of_birth"]:hover{border-color:#68627f}#landing-dob-wrap input[name="date_of_birth"]:focus{border-color:#9a89ff;outline:0;box-shadow:0 0 0 3px rgba(132,111,255,.18),inset 0 1px 2px rgba(0,0,0,.2)}
