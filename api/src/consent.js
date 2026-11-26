@@ -78,11 +78,11 @@ export function registerConsentRoutes(app, { asyncRoute, authAny, fail }) {
     if (!/^[a-f0-9]{64}$/.test(rawToken)) return fail(res, 400, 'This approval link is invalid or incomplete.');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const found = await query(
-      'SELECT id,kind,status,expires_at FROM guardian_requests WHERE token_hash=$1',
+      'SELECT id,kind,status,expires_at,token_hash FROM guardian_requests WHERE token_hash=$1',
       [tokenHash]
     );
     const item = found.rows[0];
-    if (!item || item.status !== 'pending' || new Date(item.expires_at).getTime() < Date.now()) {
+    if (!item || !tokenHashMatches(tokenHash, item.token_hash) || item.status !== 'pending' || new Date(item.expires_at).getTime() < Date.now()) {
       return fail(res, 410, 'This approval link has expired or has already been used. Ask the learner to request a new one.');
     }
     res.json({ valid: true, kind: item.kind });
