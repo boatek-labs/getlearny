@@ -11,12 +11,12 @@ test('ageOn calculates age before and after birthday', () => {
 
 test('dateOnly and ageOn handle PostgreSQL DATE values returned as Date objects', () => {
   const now = new Date('2026-11-26T12:00:00Z');
-  const tenYearOldBirthday = new Date('2016-11-26T00:00:00.000Z');
+  const tenYearOldBirthday = new Date(2016, 10, 26);
   assert.equal(dateOnly(tenYearOldBirthday), '2016-11-26');
   assert.equal(dateOnly('2010-03-04T00:00:00.000Z'), '2010-03-04');
   assert.equal(dateOnly(new Date('invalid')), '');
   assert.equal(ageOn(tenYearOldBirthday, now), 10);
-  assert.equal(ageOn(new Date('2008-11-27T00:00:00.000Z'), now), 17);
+  assert.equal(ageOn(new Date(2008, 10, 27), now), 17);
 });
 
 test('signup requires a valid date of birth and terms acceptance', () => {
