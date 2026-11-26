@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs';
-import { randomUUID, randomInt, createHash } from 'node:crypto';
+import { randomUUID, randomInt, createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -233,7 +233,11 @@ app.post('/api/v1/auth/register/verify-otp',emailOtpLimiter,asyncRoute(async(req
  if(new Date(record.expires_at).getTime()<Date.now()){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,400,'That code has expired. Request a new verification code.')}
  if(record.attempts>=5){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,429,'Too many incorrect attempts. Request a new verification code.')}
  const submitted=createHash('sha256').update(email+':'+parsed.data.code+':'+process.env.JWT_SECRET).digest('hex');
- if(submitted!==record.otp_hash){await query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE email=$1',[email]);return fail(res,400,'That verification code is incorrect. Check it and try again.')}
+ const storedHash=String(record.otp_hash||'').trim();
+ const submittedBytes=Buffer.from(submitted,'hex');
+ const storedBytes=/^[a-f0-9]{64}$/i.test(storedHash)?Buffer.from(storedHash,'hex'):Buffer.alloc(0);
+ const hashMatches=submittedBytes.length===32&&storedBytes.length===32&&timingSafeEqual(submittedBytes,storedBytes);
+ if(!hashMatches){await query('UPDATE email_verification_codes SET attempts=attempts+1 WHERE email=$1',[email]);return fail(res,400,'That verification code is incorrect. Check it and try again.')}
  const data=record.pending_data;
  try{
   if(!data.date_of_birth||!data.terms_version){await query('DELETE FROM email_verification_codes WHERE email=$1',[email]);return fail(res,400,'Please create your account again so we can confirm your date of birth and terms acceptance.');}
