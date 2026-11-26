@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { query } from './db.js';
-import { sendEmail, emailConfigured } from './mailer.js';
+import { sendEmail, emailConfigured, brandedEmail } from './mailer.js';
 
 export const TERMS_VERSION = '2026-10-27';
 export const LOCATION_CONSENT_VERSION = '2026-10-27';
@@ -57,7 +57,7 @@ export async function createGuardianRequest({ userId, childName, kind = 'account
   const link = String(process.env.APP_URL).replace(/\/$/, '') + '/guardian.html?token=' + encodeURIComponent(rawToken);
   let sent = false;
   try {
-    await sendEmail({to:guardianEmail,subject:'Approve a GetLearny account',text:'Hello,\n\n' + childName + ' has requested to use GetLearny. Review the request and choose approve or decline here:\n' + link + '\n\nThis link expires in 7 days. If you did not expect this message, you can ignore it.'});
+    await sendEmail({to:guardianEmail,subject:'Parent or guardian approval · GetLearny',text:'Hello,\n\n' + childName + ' has requested to use GetLearny. Review the request and choose approve or decline here:\n' + link + '\n\nThis link expires in 7 days. If you did not expect this message, you can ignore it.',html:brandedEmail({preheader:'A learner has requested parent or guardian approval',title:'Approval requested',greeting:'Hello,',paragraphs:[childName+' has requested permission to use GetLearny. Please review the request and choose whether to approve or decline.','This secure approval link expires in 7 days. If you did not expect this message, you can ignore it.'],actionUrl:link,actionLabel:'Review approval request',footnote:'This request is private. Only use the button if you are the learner’s parent or legal guardian.'})});
     sent = true;
   } catch (error) {
     console.error('Guardian approval email failed:', error?.message || 'SMTP error');
