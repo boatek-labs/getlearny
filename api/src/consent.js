@@ -9,7 +9,12 @@ export const USER_COLUMNS = 'id,name,email,role,avatar_data,class_level,subjects
 
 export function dateOnly(value) {
   if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? '' : value.toISOString().slice(0, 10);
+    if (Number.isNaN(value.getTime())) return '';
+    // node-postgres parses DATE values at local midnight; use local calendar parts.
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return year + '-' + month + '-' + day;
   }
   if (typeof value !== 'string') return '';
   const match = /^(\d{4}-\d{2}-\d{2})(?:$|T)/.exec(value.trim());
