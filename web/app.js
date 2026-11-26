@@ -17,7 +17,7 @@ async function api(path,opts={}) {
   try{
    const response=await fetch(String(base).replace(/\/$/,'')+path,{...fetchOpts,signal:opts.signal||controller.signal,headers:{...(!isForm?{'Content-Type':'application/json'}:{}),...(state.token?{Authorization:'Bearer '+state.token}:{}),...(opts.headers||{})}});
    const data=await response.json().catch(()=>({}));
-   if(!response.ok){const error=new Error(data.error||'Request failed ('+response.status+')');error.status=response.status;throw error;}
+   if(!response.ok){const error=new Error(data.error||'Request failed ('+response.status+')');error.status=response.status;error.code=typeof data.code==='string'?data.code:'';throw error;}
    return data;
   }catch(error){
    if(error.name==='AbortError')throw new Error('Connection timed out. Check your internet connection, then retry.');
@@ -181,7 +181,7 @@ async function loadDashboard(){
       if(!me?.user)throw new Error('Session validation failed');
       state.user=me.user;localStorage.setItem('gl_user',JSON.stringify(state.user));
     }catch(error){
-      if(/401|403|sign in required|session expired|invalid token|jwt expired/i.test(error.message)){
+      if(error.status===403&&['AGE_DECLARATION_REQUIRED','TERMS_REACCEPT_REQUIRED'].includes(error.code)){setConnection('Complete your account details to continue','#f0b84d');}else if(/401|403|sign in required|session expired|invalid token|jwt expired/i.test(error.message)){
         state.token='';state.user=null;sessionExpired=true;localStorage.removeItem('gl_token');localStorage.removeItem('gl_user');
         setConnection('Session expired · sign in again','#f0b84d');
       }else{
