@@ -140,8 +140,8 @@ function renderRecords(){const journal=$('#journal-list');journal.innerHTML=stat
 $('#test-list').innerHTML=state.tests.length?state.tests.map(t=>`<article class="record"><div class="record-top"><span>${esc(new Date(t.taken_at||t.date||Date.now()).toLocaleDateString())}</span><span>${Number(t.score/t.max_score*100).toFixed(0)}%</span></div><b>${esc(t.title)} · ${esc(t.subject)}</b><p>Score: ${esc(t.score)} / ${esc(t.max_score)}</p></article>`).join(''):'<div class="record"><p>No tests recorded yet. Add your next class test or practice result above.</p></div>'}
 function localRead(key){try{return JSON.parse(localStorage.getItem(key)||'[]')}catch{return []}}function localWrite(key,v){localStorage.setItem(key,JSON.stringify(v))}
 async function loadCommunitySummary(){
- const note=$('#community-note');
- if(!state.token){if(note)note.textContent='Sign in to track your study streak and invite a study buddy.';return}
+ const note=$('#community-note'),meta=$('#community-meta');
+ if(!state.token){if(note)note.textContent='Sign in to track your study streak and invite a study buddy.';if(meta)meta.textContent='Invites: 0 · Joined and active: 0';return}
  try{
   const data=await api('/community/summary',{timeoutMs:10000});
   const streak=data.streak||{};
@@ -155,7 +155,8 @@ async function loadCommunitySummary(){
   if(buddy)buddy.onclick=()=>shareLink('Study with me on GetLearny','Join me on GetLearny and let’s build a consistent study habit.');
   if(share)share.onclick=()=>shareLink('GetLearny','Learn with purpose. Join GetLearny.');
   if(copy)copy.onclick=async()=>{try{await navigator.clipboard.writeText(url.toString());if(note)note.textContent='Your invite link has been copied.'}catch{if(note)note.textContent='Copy this link: '+url.toString()}};
-  if(note){const refs=data.referral||{};note.textContent=(streak.current?'You’re building consistency — keep learning each day.':'Complete a lesson or practice to start building your streak.')+' Invites: '+(refs.invited||0)+' · Joined and active: '+(refs.qualified||0)+'.';}
+  if(note)note.textContent=streak.current?'You’re building consistency — keep learning each day.':'Complete a lesson or practice to start building your streak.';
+  if(meta){const refs=data.referral||{};meta.textContent='Invites: '+(refs.invited||0)+' · Joined and active: '+(refs.qualified||0);}
  }catch(error){if(note)note.textContent='Could not load streak information right now. Try again later.';console.warn('Community summary failed',error)}
 }
 async function loadDashboard(){
