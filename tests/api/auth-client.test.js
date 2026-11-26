@@ -41,7 +41,19 @@ test('updated auth scripts use fresh cache keys', async () => {
     read('../../web/app.html')
   ]);
 
-  assert.ok(index.includes('/auth.js?v=20261126-auth-review1'));
+  assert.ok(index.includes('/auth.js?v=20261126-auth-review2'));
   assert.ok(app.includes('/app.js?v=20261126-auth-gate1'));
   assert.ok(app.includes('/consent.js?v=20261126-auth-gate1'));
+});
+
+test('resending a signup OTP converts the typed date back to ISO before requesting a new code', async () => {
+  const auth = await read('../../web/auth.js');
+  const start = auth.indexOf("$('#landing-resend-otp')");
+  const end = auth.indexOf('async function setupGoogle()', start);
+  assert.ok(start >= 0 && end > start, 'OTP resend handler exists');
+  const handler = auth.slice(start, end);
+  const normalize = handler.indexOf('const normalizedDob=parseDobInput(v.date_of_birth)');
+  const assign = handler.indexOf('v.date_of_birth=normalizedDob');
+  const resend = handler.indexOf('await requestOtp(v)');
+  assert.ok(normalize >= 0 && assign > normalize && resend > assign, 'resend normalizes DD/MM/YY to YYYY-MM-DD before calling the API');
 });
