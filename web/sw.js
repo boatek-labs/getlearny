@@ -1,4 +1,4 @@
-const CACHE_NAME='getlearny-shell-v17';
+const CACHE_NAME='getlearny-shell-v18';
 const SHELL_ASSETS=[
  '/',
  '/index.html',
@@ -7,7 +7,7 @@ const SHELL_ASSETS=[
  '/consent.css?v=20261029-1',
  '/consent.js?v=20261029-1',
  '/revision.css?v=20261019-4',
- '/app.js?v=20261120-tutor-render3',
+ '/app.js?v=20261126-study-buddy-fix1',
  '/focus.js?v=20261019-3',
  '/revision.js?v=20261019-4',
  '/manifest.json',

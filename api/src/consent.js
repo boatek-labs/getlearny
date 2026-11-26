@@ -1,10 +1,17 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { query } from './db.js';
 import { sendEmail, emailConfigured, brandedEmail } from './mailer.js';
 
-export const TERMS_VERSION = '2026-10-27';
-export const LOCATION_CONSENT_VERSION = '2026-10-27';
+export const TERMS_VERSION = '2026-11-26';
+export const LOCATION_CONSENT_VERSION = '2026-11-26';
 export const ADULT_AGE = 18;
+function tokenHashMatches(expected, actual) {
+  const left = String(expected || '').trim();
+  const right = String(actual || '').trim();
+  if (!/^[a-f0-9]{64}$/i.test(left) || !/^[a-f0-9]{64}$/i.test(right)) return false;
+  return timingSafeEqual(Buffer.from(left, 'hex'), Buffer.from(right, 'hex'));
+}
+
 export const USER_COLUMNS = 'id,name,email,role,avatar_data,class_level,subjects,created_at,date_of_birth,age_declared_at,terms_accepted_at,terms_version,account_status';
 
 export function ageOn(value, now = new Date()) {
@@ -71,11 +78,11 @@ export function registerConsentRoutes(app, { asyncRoute, authAny, fail }) {
     if (!/^[a-f0-9]{64}$/.test(rawToken)) return fail(res, 400, 'This approval link is invalid or incomplete.');
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const found = await query(
-      'SELECT id,kind,status,expires_at FROM guardian_requests WHERE token_hash=$1',
+      'SELECT id,kind,status,expires_at,token_hash FROM guardian_requests WHERE token_hash=$1',
       [tokenHash]
     );
     const item = found.rows[0];
-    if (!item || item.status !== 'pending' || new Date(item.expires_at).getTime() < Date.now()) {
+    if (!item || !tokenHashMatches(tokenHash, item.token_hash) || item.status !== 'pending' || new Date(item.expires_at).getTime() < Date.now()) {
       return fail(res, 410, 'This approval link has expired or has already been used. Ask the learner to request a new one.');
     }
     res.json({ valid: true, kind: item.kind });
